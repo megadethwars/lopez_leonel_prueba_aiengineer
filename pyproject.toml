@@ -1,0 +1,10 @@
+[project]
+name = "tiendahogar-agent"
+version = "1.0.0"
+description = "Agente de soporte al cliente de TiendaHogar (RAG + tools + guardrails)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]

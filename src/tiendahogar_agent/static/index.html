@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TiendaHogar · Soporte</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7280; --accent:#0f766e; --user:#e6f4f1; --warn:#fff4e5; --border:#e5e7eb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1115; --card:#181b22; --text:#e7e9ee; --muted:#9aa3b2; --accent:#2dd4bf; --user:#123532; --warn:#3a2a12; --border:#2a2f3a; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px; display:flex; flex-direction:column; height:100vh; }
+  header h1 { margin:0; font-size:20px; } header p { margin:4px 0 16px; color:var(--muted); font-size:13px; }
+  #log { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding-bottom:12px; }
+  .msg { padding:10px 14px; border-radius:12px; border:1px solid var(--border); background:var(--card); max-width:85%; white-space:pre-wrap; }
+  .user { align-self:flex-end; background:var(--user); }
+  .escalated { background:var(--warn); }
+  .meta { font-size:12px; color:var(--muted); margin-top:6px; }
+  form { display:flex; gap:8px; } input { flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text); font:inherit; }
+  button { padding:10px 16px; border:0; border-radius:10px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; } button:disabled { opacity:.5; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; } .chip { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer; }
+  #key { max-width:180px; flex:none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>TiendaHogar · Asistente de soporte</h1>
+    <p>Prototipo: garantías, devoluciones, envíos, reembolsos y estado de pedidos (ORD-1001…ORD-1004). <a href="/docs">API docs</a></p>
+  </header>
+  <div class="chips" id="chips"></div>
+  <div id="log"></div>
+  <form id="f">
+    <input id="key" type="password" placeholder="API key (si aplica)" autocomplete="off">
+    <input id="q" placeholder="Escribe tu pregunta…" autocomplete="off" required>
+    <button id="b">Enviar</button>
+  </form>
+</main>
+<script>
+  const examples = ["¿Cuánto dura la garantía de una refrigeradora?", "¿Dónde está mi pedido ORD-1001?", "¿Y el pedido ORD-9999?",
+    "Quiero un reembolso de $800 por mi lavadora", "Un empleado me trató muy mal en la tienda", "¿Cuánto cuesta una refrigeradora?", "¿Venden televisores?"];
+  const log = document.getElementById("log"), q = document.getElementById("q"), b = document.getElementById("b"), key = document.getElementById("key");
+  let sessionId = null;
+  try { key.value = localStorage.getItem("th_key") || ""; } catch (e) {}
+  for (const ex of examples) { const c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = ex; c.onclick = () => { q.value = ex; send(); }; document.getElementById("chips").append(c); }
+  function add(text, cls, meta) {
+    const d = document.createElement("div"); d.className = "msg " + cls; d.textContent = text;
+    if (meta) { const m = document.createElement("div"); m.className = "meta"; m.textContent = meta; d.append(m); }
+    log.append(d); log.scrollTop = log.scrollHeight;
+  }
+  async function send() {
+    const text = q.value.trim(); if (!text) return;
+    add(text, "user"); q.value = ""; b.disabled = true;
+    try { localStorage.setItem("th_key", key.value); } catch (e) {}
+    try {
+      const headers = { "Content-Type": "application/json" }; if (key.value) headers["X-API-Key"] = key.value;
+      const r = await fetch("/chat", { method: "POST", headers, body: JSON.stringify({ message: text, session_id: sessionId }) });
+      const data = await r.json();
+      if (!r.ok) { add("Error: " + (data.detail || r.status), "escalated"); return; }
+      sessionId = data.session_id;
+      const meta = [];
+      if (data.sources.length) meta.push("Fuentes: " + data.sources.map(s => `${s.title} (${s.score})`).join(", "));
+      if (data.tool_calls.length) meta.push("Tools: " + data.tool_calls.map(t => `${t.tool}(${JSON.stringify(t.input)})`).join(", "));
+      if (data.escalated) meta.push("Escalado: " + data.escalation.category + " [" + data.escalation.source + "]");
+      add(data.answer, data.escalated ? "escalated" : "", meta.join(" · "));
+    } catch (e) { add("Error de red: " + e, "escalated"); }
+    finally { b.disabled = false; q.focus(); }
+  }
+  document.getElementById("f").onsubmit = (e) => { e.preventDefault(); send(); };
+</script>
+</body>
+</html>

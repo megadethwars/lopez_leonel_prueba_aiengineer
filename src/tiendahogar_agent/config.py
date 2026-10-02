@@ -1,0 +1,33 @@
+"""Configuración por variables de entorno (ver .env.example)."""
+
+import os
+from dataclasses import dataclass, field
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+def _env(name: str, default: str) -> str:
+    return os.getenv(name) or default
+
+
+@dataclass(frozen=True)
+class Settings:
+    anthropic_model: str = field(default_factory=lambda: _env("ANTHROPIC_MODEL", "claude-opus-5-5"))
+    anthropic_effort: str = field(default_factory=lambda: _env("ANTHROPIC_EFFORT", "low"))
+    max_tokens: int = field(default_factory=lambda: int(_env("ANTHROPIC_MAX_TOKENS", "4096")))
+    embedding_model: str = field(
+        default_factory=lambda: _env(
+            "EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        )
+    )
+    retrieval_top_k: int = field(default_factory=lambda: int(_env("RETRIEVAL_TOP_K", "3")))
+    retrieval_threshold: float = field(
+        default_factory=lambda: float(_env("RETRIEVAL_THRESHOLD", "0.25"))
+    )
+    retrieval_alpha: float = field(default_factory=lambda: float(_env("RETRIEVAL_ALPHA", "0.7")))
+    max_tool_iterations: int = field(default_factory=lambda: int(_env("MAX_TOOL_ITERATIONS", "4")))
+
+
+settings = Settings()
