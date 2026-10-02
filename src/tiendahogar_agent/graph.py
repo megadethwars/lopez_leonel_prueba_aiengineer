@@ -1,14 +1,4 @@
-"""Orquestación del agente con LangGraph.
 
-    START → input_guardrail ─┬─(escalar)──────────────────────────────→ escalate → END
-                             └→ retrieve ─┬─(sin contexto)─────────────→ no_context → END
-                                          └→ agent ⇄ tools
-                                               └─(fin)→ output_guardrail → END
-
-El historial `messages` está en formato de la API de Claude y es append-only
-(nunca se reescriben turnos anteriores), requisito para conservar los bloques de
-thinking entre turnos y aprovechar el prompt cache.
-"""
 
 import json
 import operator
