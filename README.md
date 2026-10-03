@@ -115,6 +115,8 @@ Requieren `ANTHROPIC_API_KEY` y **consumen tokens** (unos USD 0.50–0.70 por co
 
 **Microservicio + chat web:**
 
+RECORDATORIO: Instalar un ambiente virtual primero (recomendado)
+
 ```bash
 uvicorn tiendahogar_agent.main:app --app-dir src --port 8000
 ```
