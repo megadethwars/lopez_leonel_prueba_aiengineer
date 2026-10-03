@@ -2,7 +2,7 @@
 
 import pytest
 
-from tiendahogar_agent.guardrails import (
+from tiendahogar_agent.domain.guardrails import (
     EscalationCategory as C,
     check_input,
     check_output,
