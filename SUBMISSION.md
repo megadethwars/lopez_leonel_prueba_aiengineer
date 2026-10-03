@@ -30,21 +30,63 @@ flowchart LR
     R --> KB[(5 documentos<br/>índice en memoria)]
 ```
 
-**Componentes**
+**Arquitectura hexagonal (ports & adapters)**
 
-| Componente | Responsabilidad |
-|---|---|
-| `api.py` (FastAPI) | Contrato HTTP (`/chat`, `/health`, OpenAPI), API key opcional para la demo pública y mapeo de errores del proveedor a 429/502/503. |
-| `graph.py` (LangGraph) | Orquestación explícita con nodos y rutas condicionales, y memoria por `session_id` mediante un checkpointer. |
-| `guardrails.py` | Tres capas: (1) reglas regex antes del LLM; (2) tool `escalar_a_humano` + system prompt para paráfrasis que las reglas no ven; (3) un control de salida que bloquea cualquier respuesta que "apruebe" un reembolso y garantiza que toda escalación incluya el canal humano. |
-| `retriever.py` | Índice vectorial en memoria más score léxico IDF, con top-k y umbral. |
-| `orders.py` | La tool con la firma exacta `consultar_estado_pedido(order_id: str) -> dict` y un estado explícito `"no encontrado"`. |
-| `llm.py` | Claude vía SDK oficial `anthropic` detrás de la interfaz `LLMClient`. En los tests se inyecta un LLM falso. |
+El flujo anterior vive en el núcleo de aplicación. Todo lo externo (LLM, base de conocimiento, índice vectorial, pedidos, skills, notificaciones, HTTP) entra o sale por **ports**, interfaces declaradas como `typing.Protocol`, y se implementa con **adapters** que se conectan en un único *composition root* (`bootstrap.py`).
+
+```mermaid
+flowchart LR
+    subgraph IN[Adapters de entrada]
+        HTTP[FastAPI<br/>POST /chat]
+        CLI[CLI]
+    end
+    subgraph CORE[Núcleo]
+        APP[application<br/>SupportAgent · LangGraph<br/>ToolRegistry · prompts]
+        DOM[domain<br/>guardrails · Order · Escalation]
+        PORTS{{ports<br/>LLM · Retriever · KnowledgeSource<br/>OrderRepository · SkillRepository<br/>EscalationNotifier}}
+        APP --> DOM
+        APP --> PORTS
+    end
+    subgraph OUT[Adapters de salida]
+        LLM[AnthropicLLM]
+        RET[HybridRetriever<br/>+ FastEmbed]
+        KB[FileSystemKnowledgeSource<br/>.txt]
+        ORD[InMemoryOrderRepository]
+        SK[FileSystemSkillRepository<br/>SKILL.md]
+        NOT[LoggingEscalationNotifier]
+    end
+    HTTP --> APP
+    CLI --> APP
+    LLM -.implementa.-> PORTS
+    RET -.implementa.-> PORTS
+    KB -.implementa.-> PORTS
+    ORD -.implementa.-> PORTS
+    SK -.implementa.-> PORTS
+    NOT -.implementa.-> PORTS
+```
+
+| Capa | Contenido | Puede depender de |
+|---|---|---|
+| `domain/` | `Document`, `Order`, `Escalation`, guardrails deterministas (reglas de Doc 4 y Doc 5) | nada (Python puro) |
+| `ports/` | `LLMPort` (+ errores `LLMError`), `RetrieverPort`, `KnowledgeSourcePort`, `OrderRepositoryPort`, `SkillRepositoryPort`, `EscalationNotifierPort` | `domain` |
+| `application/` | `SupportAgent` (grafo LangGraph), `OrderStatusService` (`consultar_estado_pedido(order_id: str) -> dict`), `ToolRegistry`, prompts | `domain`, `ports` |
+| `adapters/inbound/` | FastAPI (`/chat`, `/health`, chat web, OpenAPI, API key opcional), CLI | `application`, `ports` |
+| `adapters/outbound/` | Claude (SDK `anthropic`), retriever híbrido + fastembed, `.txt`, `SKILL.md`, pedidos mock, notificador | `domain`, `ports` |
+| `bootstrap.py` | Conecta cada port con su adapter a partir de `config.py` | todo |
+
+`tests/test_architecture.py` analiza los imports del código fuente y falla si una capa interna depende de una externa. Por ejemplo: el dominio importando FastAPI, la aplicación importando un adapter, o la API HTTP importando el SDK de Anthropic.
+
+**Componentes clave**
+
+- **Guardrails en tres capas:** (1) reglas regex de dominio antes del LLM; (2) la tool `escalar_a_humano` + system prompt para paráfrasis que las reglas no ven; (3) un control de salida que bloquea cualquier respuesta que "apruebe" un reembolso y garantiza que toda escalación incluya el canal humano. Cada escalamiento se publica por `EscalationNotifierPort`; si la notificación falla, la respuesta al cliente no se interrumpe.
+- **Skill de conversación** (`skills/atencion_al_cliente/SKILL.md`): tono, empatía, saludos y formato, editables por negocio o CX sin tocar código. Se anexa al system prompt **después** de las reglas de seguridad, que viven en `application/prompts.py` y prevalecen ante cualquier conflicto.
+- **`ToolRegistry`:** agregar una tool nueva (p. ej. inventario vía otro microservicio) es registrar su esquema y su handler en `bootstrap.py`, sin tocar el grafo.
 
 **Por qué este diseño**
 
 - **Lo crítico no depende del LLM.** Los casos que el negocio prohíbe resolver (Doc 4 y Doc 5) se detectan con reglas deterministas antes de llamar al modelo. Son auditables, testeables, sin costo de tokens y sin latencia. El LLM es la segunda red para lo que las reglas no capturan, y el guardrail de salida es la tercera.
 - **Anti-alucinación por construcción.** (a) Si ningún documento supera el umbral y la pregunta no trata de un pedido, se responde con una plantilla sin invocar al LLM. (b) Si hay contexto, el system prompt restringe las fuentes de verdad a `<contexto>` y a los resultados de las tools. (c) La tool nunca fabrica datos de un pedido inexistente.
+- **Hexagonal para crecer sin reescribir.** El prototipo usa archivos y tablas en memoria, pero el núcleo solo conoce interfaces. Pasar a Databricks, al OMS real o a Kafka significa escribir adapters, no tocar la lógica del agente ni sus tests. Además, cada port se puede sustituir por un doble de prueba: los tests corren sin red ni API key.
 - **LangGraph y no una cadena lineal.** El flujo tiene ramas (escalar, sin contexto, bucle de tools) que conviene que sean explícitas, visibles y testeables por nodo. Además trae checkpointer para multi-turno y se mapea directo a un despliegue productivo.
 - **SDK de Anthropic dentro de los nodos, sin capa de abstracción LangChain.** Da control total del request: tools con `strict: true`, `effort`, `fallbacks` server-side y bloques de thinking. El historial es append-only, un requisito de los modelos Claude actuales para conservar el razonamiento entre turnos, y además mantiene válido el prompt cache.
 - **Modelo:** `claude-opus-5-5` con `effort: low`, configurable por variable de entorno. Para un chat de soporte con respuestas cortas, un esfuerzo bajo da buena calidad con menos latencia y costo. Se activa `fallbacks: "default"` para que un rechazo del clasificador de seguridad se reintente en otro modelo en lugar de dejar al cliente sin respuesta.
@@ -53,7 +95,8 @@ flowchart LR
 
 - Índice y memoria de conversación en proceso (`InMemorySaver`): se pierden al reiniciar y no escalan horizontalmente. Es suficiente para el prototipo.
 - Guardrail de entrada basado en regex: es preciso y explicable, pero de recall limitado ante paráfrasis. Por eso existe la capa 2.
-- No hay streaming ni evaluación automática con LLM-as-judge. La suite de pruebas valida la orquestación con un LLM falso.
+- No hay streaming ni evaluación automática con LLM-as-judge. La suite de pruebas valida la orquestación con adapters falsos del LLM.
+- La hexagonal agrega más archivos y una capa de indirección que no hace falta para 5 documentos. Se aceptó a cambio de poder conectar nuevos sistemas sin tocar el núcleo, que es el objetivo declarado del proyecto.
 
 ## Decisiones técnicas de RAG
 
@@ -72,18 +115,23 @@ Comando exacto (desde la raíz del repo, con dependencias instaladas):
 pytest tests/
 ```
 
-51 tests en unos 5 segundos. No requieren API key: usan el retriever real con embeddings locales y un LLM falso guionizado.
+69 tests en unos 5 segundos. No requieren API key: usan el retriever real con embeddings locales y adapters falsos para el LLM y el notificador.
 
 | Archivo | Qué cubre |
 |---|---|
 | `test_knowledge_base.py` | Los 5 documentos se cargan desde `data/knowledge_base/` completos, en orden y con el texto **sin alterar**. Un archivo mal formado se rechaza. |
 | `test_retrieval.py` | El top-1 es el documento correcto para preguntas claras de cada política (incluida una de **garantía** que verifica "6 meses") y para consultas cortas. Se respetan top-k y umbral. Las preguntas fuera de dominio no recuperan nada. |
-| `test_orders.py` | `ORD-1001` devuelve exactamente su fila; un pedido entregado no tiene fecha; los IDs se normalizan. IDs **inválidos** (`ORD-9999`, vacío, inyección) → `encontrado=False`, `estado="no encontrado"` y **ningún** dato fabricado. |
+| `test_orders.py` | La tool mantiene la **firma exacta** `(order_id: str) -> dict`. `ORD-1001` devuelve exactamente su fila; un pedido entregado no tiene fecha; los IDs se normalizan. IDs **inválidos** (`ORD-9999`, vacío, inyección) → `encontrado=False`, `estado="no encontrado"` y **ningún** dato fabricado. El servicio funciona con cualquier adapter del repositorio. |
 | `test_guardrails.py` | Se **activa el escalamiento** para reembolsos > $500 (incluye "$1,250.00" y "2 mil"), quejas de trato, disputas de facturación y temas legales. No se activa para preguntas normales, reembolsos ≤ $500 ni IDs de pedido confundidos con montos. El guardrail de salida bloquea "tu reembolso ha sido aprobado". |
-| `test_agent_graph.py` | Recorrido end-to-end del grafo: el escalamiento ocurre **sin llamar al LLM**; la tool alimenta al LLM con los datos reales; un pedido inexistente llega como "no encontrado"; las preguntas fuera de dominio no llegan al LLM; el contexto RAG se envía en el prompt; la tool `escalar_a_humano` fuerza el canal humano; el historial es append-only entre turnos. |
+| `test_agent_graph.py` | Recorrido end-to-end del grafo: el escalamiento ocurre **sin llamar al LLM**; la tool alimenta al LLM con los datos reales; un pedido inexistente llega como "no encontrado"; las preguntas fuera de dominio no llegan al LLM; el contexto RAG se envía en el prompt; la tool `escalar_a_humano` fuerza el canal humano; el historial es append-only entre turnos; los escalamientos se publican por el port de notificación, y un fallo del notificador no rompe la respuesta. |
+| `test_conversation_skill.py` | La skill se carga sin frontmatter y se inyecta después de las reglas de seguridad. Los saludos y agradecimientos llegan al LLM, y un mensaje fuera de dominio que empieza con "hola" no se trata como saludo. |
+| `test_logging.py` | El RAG, las tools y los escalamientos quedan registrados con el `session_id` del turno. |
+| `test_architecture.py` | Reglas de dependencia de la hexagonal, verificadas sobre los imports del código: el dominio no depende de nada, los ports solo del dominio, la aplicación no conoce adapters ni frameworks, y los adapters de entrada no dependen de los de salida. |
 | `test_api.py` | Contrato HTTP de `/health` y `/chat`, y exigencia de `X-API-Key` cuando se configura. |
 
 ## Cómo mapearías esto a producción
+
+Gracias a la arquitectura hexagonal, la mayor parte de la migración consiste en **escribir adapters nuevos para los ports existentes** y cambiar su conexión en `bootstrap.py`. El dominio, el grafo del agente, los guardrails y sus tests no cambian.
 
 | Prototipo | Stack Grupo Mariposa |
 |---|---|
