@@ -1,8 +1,10 @@
 
 
 import json
+import logging
 import operator
 import re
+import time
 from typing import Annotated, Any, Literal, TypedDict
 
 from langgraph.checkpoint.memory import InMemorySaver
@@ -19,6 +21,7 @@ from .guardrails import (
 )
 from .knowledge_base import HUMAN_SUPPORT_EMAIL
 from .llm import LLMClient
+from .logging_config import preview, session_id_var
 from .orders import CONSULTAR_ESTADO_PEDIDO_TOOL, consultar_estado_pedido
 from .retriever import Retriever
 
@@ -41,6 +44,7 @@ NO_CONTEXT_MESSAGE = (
     f"{HUMAN_SUPPORT_EMAIL}."
 )
 TOOLS = [CONSULTAR_ESTADO_PEDIDO_TOOL, ESCALAR_A_HUMANO_TOOL]
+logger = logging.getLogger(__name__)
 _ORDER_INTENT = re.compile(r"\bord-?\d+\b|\bpedido|\borden\b")
 
 
@@ -88,25 +92,36 @@ def build_graph(llm: LLMClient, retriever: Retriever, checkpointer: Any | None =
     def input_guardrail(state: AgentState) -> AgentState:
         hit = check_input(state["question"])
         if hit:
+            logger.warning("Guardrail de entrada activado: categoria=%s motivo=%s",
+                           hit.category.value, hit.reason)
             return {"escalation": _escalation(hit.category, hit.reason, "input_guardrail"),
                     "route": "escalate"}
+        logger.info("Guardrail de entrada: sin coincidencias")
         return {"escalation": None, "route": "retrieve"}
 
     def retrieve(state: AgentState) -> AgentState:
         question = state["question"]
+        started = time.perf_counter()
         sources = [
             {"doc_id": r.document.doc_id, "title": r.document.title,
              "content": r.document.content, "score": round(r.score, 3)}
             for r in retriever.retrieve(question)
         ]
+        logger.info(
+            "RAG: %d documento(s) sobre el umbral %.2f en %.0f ms: %s",
+            len(sources), retriever.threshold, (time.perf_counter() - started) * 1000,
+            ", ".join(f"{s['doc_id']}={s['score']}" for s in sources) or "ninguno",
+        )
         has_history = bool(state.get("messages"))
         if not sources and not has_history and not _ORDER_INTENT.search(normalize(question)):
+            logger.info("RAG: sin contexto ni intención de pedido → respuesta 'sin información'")
             return {"sources": [], "route": "no_context"}
         return {"sources": sources, "route": "agent", "messages": [_user_turn(question, sources)]}
 
     def escalate(state: AgentState) -> AgentState:
         category = EscalationCategory(state["escalation"]["category"])
         answer = escalation_message(category)
+        logger.info("Escalamiento a humano sin llamar al LLM: categoria=%s", category.value)
         return {
             "answer": answer,
             "messages": [_user_turn(state["question"], []), _assistant_text(answer)],
@@ -123,8 +138,12 @@ def build_graph(llm: LLMClient, retriever: Retriever, checkpointer: Any | None =
         content = response["content"] or [{"type": "text", "text": NO_CONTEXT_MESSAGE}]
         stop = response["stop_reason"]
         if stop == "refusal":
+            logger.warning("El LLM rechazó la petición (refusal); se responde con mensaje seguro")
             content = [{"type": "text", "text": NO_CONTEXT_MESSAGE}]
+        elif stop == "max_tokens":
+            logger.warning("Respuesta del LLM truncada por max_tokens")
         route = "tools" if stop == "tool_use" else "output_guardrail"
+        logger.info("Agente: stop_reason=%s → %s", stop, route)
         return {"messages": [{"role": "assistant", "content": content}], "route": route}
 
     def tools(state: AgentState) -> AgentState:
@@ -134,6 +153,7 @@ def build_graph(llm: LLMClient, retriever: Retriever, checkpointer: Any | None =
             if block.get("type") != "tool_use":
                 continue
             name, args = block["name"], block.get("input") or {}
+            started = time.perf_counter()
             if name == "consultar_estado_pedido":
                 output = consultar_estado_pedido(str(args.get("order_id", "")))
             elif name == "escalar_a_humano":
@@ -146,7 +166,12 @@ def build_graph(llm: LLMClient, retriever: Retriever, checkpointer: Any | None =
                     f"debe escribir a {HUMAN_SUPPORT_EMAIL} para ser atendido por un humano.",
                 }
             else:
+                logger.error("El LLM pidió una tool desconocida: %s", name)
                 output = {"error": f"Herramienta desconocida: {name}"}
+            logger.info("Tool %s input=%s output=%s (%.1f ms)", name,
+                        json.dumps(args, ensure_ascii=False),
+                        json.dumps(output, ensure_ascii=False),
+                        (time.perf_counter() - started) * 1000)
             calls.append({"tool": name, "input": args, "output": output})
             results.append({"type": "tool_result", "tool_use_id": block["id"],
                             "content": json.dumps(output, ensure_ascii=False)})
@@ -156,6 +181,8 @@ def build_graph(llm: LLMClient, retriever: Retriever, checkpointer: Any | None =
         route = "agent"
         if iterations >= settings.max_tool_iterations:
             # Corta bucles de tools: cierra el turno con un mensaje seguro.
+            logger.warning("Límite de %d iteraciones de tools alcanzado; se corta el bucle",
+                           settings.max_tool_iterations)
             new_messages.append(_assistant_text(NO_CONTEXT_MESSAGE))
             route = "output_guardrail"
         return {"messages": new_messages, "tool_calls": calls, "tool_iterations": iterations,
@@ -166,9 +193,11 @@ def build_graph(llm: LLMClient, retriever: Retriever, checkpointer: Any | None =
         escalation = state.get("escalation")
         hit = check_output(answer)
         if hit:
+            logger.warning("Guardrail de salida activado: %s Respuesta reemplazada.", hit.reason)
             escalation = _escalation(hit.category, hit.reason, "output_guardrail")
             answer = escalation_message(hit.category)
         elif escalation and HUMAN_SUPPORT_EMAIL not in answer:
+            logger.warning("Escalamiento sin canal humano en la respuesta; se usa la plantilla")
             answer = escalation_message(EscalationCategory(escalation["category"]))
         return {"answer": answer, "escalation": escalation}
 
@@ -201,8 +230,22 @@ class SupportAgent:
             "question": question, "sources": [], "escalation": None,
             "tool_calls": [], "tool_iterations": 0, "answer": "",
         }
-        state = self.graph.invoke(turn_input, config={"configurable": {"thread_id": session_id}})
-        escalation = state.get("escalation")
+        token = session_id_var.set(session_id)  # todos los logs del turno llevan el session_id
+        started = time.perf_counter()
+        try:
+            logger.info("Pregunta recibida: %r", preview(question))
+            state = self.graph.invoke(turn_input, config={"configurable": {"thread_id": session_id}})
+            escalation = state.get("escalation")
+            logger.info(
+                "Turno completado en %.0f ms: escalado=%s fuentes=%d tools=%d",
+                (time.perf_counter() - started) * 1000, escalation is not None,
+                len(state.get("sources") or []), len(state.get("tool_calls") or []),
+            )
+        except Exception:
+            logger.exception("Error procesando el turno")
+            raise
+        finally:
+            session_id_var.reset(token)
         return {
             "session_id": session_id,
             "answer": state["answer"],

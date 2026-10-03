@@ -1,10 +1,16 @@
 """Chat interactivo en terminal:  python -m tiendahogar_agent.cli  (con PYTHONPATH=src)."""
 
+import os
 import uuid
 
-from .llm import AnthropicLLM
-from .retriever import get_retriever
-from .graph import SupportAgent
+from .logging_config import setup_logging
+
+# En la terminal los logs ensucian la conversación: por defecto solo WARNING+ (LOG_LEVEL=INFO para verlos).
+setup_logging(os.getenv("LOG_LEVEL") or "WARNING")
+
+from .graph import SupportAgent  # noqa: E402
+from .llm import AnthropicLLM  # noqa: E402
+from .retriever import get_retriever  # noqa: E402
 
 
 def main() -> None:

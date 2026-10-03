@@ -9,9 +9,12 @@ arrancar. Cada documento es corto (1 párrafo), por lo que se indexa como un
 único chunk; ver SUBMISSION.md.
 """
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 HUMAN_SUPPORT_EMAIL = "soporte@tiendahogar.example"
 
@@ -41,7 +44,10 @@ def load_documents(kb_dir: Path | str | None = None) -> list[Document]:
     directory = Path(kb_dir or os.getenv("KNOWLEDGE_BASE_DIR") or DEFAULT_KB_DIR)
     documents = [_parse(p) for p in sorted(directory.glob("*.txt"))]
     if not documents:
+        logger.error("No hay documentos .txt en %s", directory)
         raise FileNotFoundError(f"No hay documentos .txt en {directory}")
+    logger.info("Base de conocimiento cargada: %d documentos desde %s (%s)", len(documents),
+                directory, ", ".join(d.doc_id for d in documents))
     return documents
 
 

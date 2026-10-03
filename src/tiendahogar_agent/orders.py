@@ -1,6 +1,9 @@
 """Tool `consultar_estado_pedido` sobre una tabla mock de pedidos."""
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Tabla mock entregada por el cliente. "—" en el original = sin entrega estimada (None).
 _ORDERS: dict[str, dict[str, Any]] = {
@@ -20,6 +23,7 @@ def consultar_estado_pedido(order_id: str) -> dict:
     normalized = (order_id or "").strip().upper()
     order = _ORDERS.get(normalized)
     if order is None:
+        logger.info("Pedido no encontrado: %r", order_id)
         return {
             "order_id": order_id,
             "encontrado": False,

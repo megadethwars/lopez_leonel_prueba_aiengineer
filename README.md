@@ -48,6 +48,8 @@ cp .env.example .env        # y completa ANTHROPIC_API_KEY
 | `RETRIEVAL_THRESHOLD` | No | `0.25` | Score híbrido mínimo para usar un documento |
 | `RETRIEVAL_ALPHA` | No | `0.7` | Peso del componente denso en el score híbrido |
 | `KNOWLEDGE_BASE_DIR` | No | `data/knowledge_base` | Carpeta con los documentos `.txt` |
+| `LOG_LEVEL` | No | `INFO` | `DEBUG` agrega los scores de todos los documentos en cada búsqueda |
+| `LOG_FORMAT` | No | `text` | `json`: una línea JSON por evento (para Azure Monitor, Datadog, ELK) |
 | `DEMO_API_KEY` | No | — | Si se define, `POST /chat` exige el header `X-API-Key` |
 
 ## Correr los tests

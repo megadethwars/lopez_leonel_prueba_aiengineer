@@ -8,8 +8,10 @@ score = alpha * coseno(embedding) + (1 - alpha) * léxico
 Solo se usan documentos con score >= umbral (máximo top-k).
 """
 
+import logging
 import math
 import re
+import time
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Protocol
@@ -19,6 +21,9 @@ import numpy as np
 from .config import settings
 from .guardrails import normalize
 from .knowledge_base import DOCUMENTS, Document
+from .logging_config import preview
+
+logger = logging.getLogger(__name__)
 
 
 class Embedder(Protocol):
@@ -31,7 +36,14 @@ class FastEmbedEmbedder:
     def __init__(self, model_name: str | None = None):
         from fastembed import TextEmbedding
 
-        self._model = TextEmbedding(model_name=model_name or settings.embedding_model)
+        name = model_name or settings.embedding_model
+        started = time.perf_counter()
+        try:
+            self._model = TextEmbedding(model_name=name)
+        except Exception:
+            logger.exception("No se pudo cargar el modelo de embeddings %s", name)
+            raise
+        logger.info("Modelo de embeddings %s cargado en %.1f s", name, time.perf_counter() - started)
 
     def embed(self, texts: list[str]) -> np.ndarray:
         return np.array(list(self._model.embed(texts)), dtype=np.float32)
@@ -79,6 +91,10 @@ class Retriever:
             for term in terms:
                 df[term] = df.get(term, 0) + 1
         self._df = df
+        logger.info(
+            "Índice RAG construido: %d documentos, %d dimensiones, top_k=%d, umbral=%.2f, alpha=%.2f",
+            len(documents), self._matrix.shape[1], self.top_k, self.threshold, self.alpha,
+        )
 
     @staticmethod
     def _normalize(vectors: np.ndarray) -> np.ndarray:
@@ -104,7 +120,11 @@ class Retriever:
         q = self._normalize(self.embedder.embed([query]))[0]
         hybrid = self.alpha * (self._matrix @ q) + (1 - self.alpha) * self._lexical(query)
         order = np.argsort(-hybrid)
-        return [RetrievedDoc(self.documents[i], float(hybrid[i])) for i in order]
+        ranked = [RetrievedDoc(self.documents[i], float(hybrid[i])) for i in order]
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Scores para %r: %s", preview(query),
+                         ", ".join(f"{r.document.doc_id}={r.score:.3f}" for r in ranked))
+        return ranked
 
     def retrieve(self, query: str) -> list[RetrievedDoc]:
         """Top-k documentos cuyo score supera el umbral (lista vacía si ninguno)."""
