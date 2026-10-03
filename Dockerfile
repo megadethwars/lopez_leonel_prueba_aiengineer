@@ -10,6 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
+COPY data ./data
 # Pre-descarga el modelo de embeddings en la imagen (arranque rápido, sin red en runtime).
 RUN python -c "from tiendahogar_agent.retriever import FastEmbedEmbedder; FastEmbedEmbedder()"
 

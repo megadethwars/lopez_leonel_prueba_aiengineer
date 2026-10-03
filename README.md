@@ -9,8 +9,9 @@ La arquitectura y las decisiones técnicas están en [SUBMISSION.md](SUBMISSION.
 ## Estructura
 
 ```
+data/knowledge_base/  # base de conocimiento: los 5 documentos, tal cual (1 archivo .txt por documento)
 src/tiendahogar_agent/
-  knowledge_base.py   # los 5 documentos, tal cual
+  knowledge_base.py   # carga los documentos de data/knowledge_base/
   orders.py           # tool consultar_estado_pedido(order_id: str) -> dict + tabla mock
   retriever.py        # RAG: embeddings + léxico (híbrido), top-k y umbral
   guardrails.py       # reglas de escalamiento (entrada/salida) + tool escalar_a_humano
@@ -46,6 +47,7 @@ cp .env.example .env        # y completa ANTHROPIC_API_KEY
 | `RETRIEVAL_TOP_K` | No | `3` | Máximo de documentos por pregunta |
 | `RETRIEVAL_THRESHOLD` | No | `0.25` | Score híbrido mínimo para usar un documento |
 | `RETRIEVAL_ALPHA` | No | `0.7` | Peso del componente denso en el score híbrido |
+| `KNOWLEDGE_BASE_DIR` | No | `data/knowledge_base` | Carpeta con los documentos `.txt` |
 | `DEMO_API_KEY` | No | — | Si se define, `POST /chat` exige el header `X-API-Key` |
 
 ## Correr los tests

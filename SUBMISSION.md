@@ -72,10 +72,11 @@ Comando exacto (desde la raíz del repo, con dependencias instaladas):
 pytest tests/
 ```
 
-48 tests en unos 5 segundos. No requieren API key: usan el retriever real con embeddings locales y un LLM falso guionizado.
+51 tests en unos 5 segundos. No requieren API key: usan el retriever real con embeddings locales y un LLM falso guionizado.
 
 | Archivo | Qué cubre |
 |---|---|
+| `test_knowledge_base.py` | Los 5 documentos se cargan desde `data/knowledge_base/` completos, en orden y con el texto **sin alterar**. Un archivo mal formado se rechaza. |
 | `test_retrieval.py` | El top-1 es el documento correcto para preguntas claras de cada política (incluida una de **garantía** que verifica "6 meses") y para consultas cortas. Se respetan top-k y umbral. Las preguntas fuera de dominio no recuperan nada. |
 | `test_orders.py` | `ORD-1001` devuelve exactamente su fila; un pedido entregado no tiene fecha; los IDs se normalizan. IDs **inválidos** (`ORD-9999`, vacío, inyección) → `encontrado=False`, `estado="no encontrado"` y **ningún** dato fabricado. |
 | `test_guardrails.py` | Se **activa el escalamiento** para reembolsos > $500 (incluye "$1,250.00" y "2 mil"), quejas de trato, disputas de facturación y temas legales. No se activa para preguntas normales, reembolsos ≤ $500 ni IDs de pedido confundidos con montos. El guardrail de salida bloquea "tu reembolso ha sido aprobado". |
