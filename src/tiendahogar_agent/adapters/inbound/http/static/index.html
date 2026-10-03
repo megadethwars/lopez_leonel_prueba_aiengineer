@@ -2,73 +2,288 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TiendaHogar · Soporte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7280; --accent:#0f766e; --user:#e6f4f1; --warn:#fff4e5; --border:#e5e7eb; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#0f1115; --card:#181b22; --text:#e7e9ee; --muted:#9aa3b2; --accent:#2dd4bf; --user:#123532; --warn:#3a2a12; --border:#2a2f3a; }
+  :root {
+    --bg: #e9edf1;            /* fondo de la página: gris suave, no cansa la vista */
+    --panel: #ffffff;
+    --chat-bg: #f4f6f8;       /* área de mensajes */
+    --border: #dde2e8;
+    --text: #1f2933;
+    --text-muted: #5b6673;
+    --brand: #0f6e66;         /* verde azulado: contraste AA con texto blanco */
+    --brand-hover: #0b5a53;
+    --brand-soft: #e3f1ef;
+    --bubble-bot: #ffffff;
+    --bubble-user: #0f6e66;
+    --bubble-user-text: #ffffff;
+    --chip-bg: #eef1f4;
+    --warn-bg: #fff6e5;
+    --warn-border: #f2d29b;
+    --warn-text: #7a4b00;
+    --error-bg: #fdecec;
+    --error-text: #9b1c1c;
+    --online: #16a34a;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 8px 24px rgba(16, 24, 40, .08);
+    --radius: 16px;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width:760px; margin:0 auto; padding:24px 16px; display:flex; flex-direction:column; height:100vh; }
-  header h1 { margin:0; font-size:20px; } header p { margin:4px 0 16px; color:var(--muted); font-size:13px; }
-  #log { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding-bottom:12px; }
-  .msg { padding:10px 14px; border-radius:12px; border:1px solid var(--border); background:var(--card); max-width:85%; white-space:pre-wrap; }
-  .user { align-self:flex-end; background:var(--user); }
-  .escalated { background:var(--warn); }
-  .meta { font-size:12px; color:var(--muted); margin-top:6px; }
-  form { display:flex; gap:8px; } input { flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text); font:inherit; }
-  button { padding:10px 16px; border:0; border-radius:10px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; } button:disabled { opacity:.5; }
-  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; } .chip { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer; }
-  #key { max-width:180px; flex:none; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15181d; --panel: #1c2027; --chat-bg: #181b21; --border: #2b313b;
+      --text: #e6e9ee; --text-muted: #9aa4b2; --brand: #2bb3a3; --brand-hover: #35c7b6;
+      --brand-soft: #173a37; --bubble-bot: #232830; --bubble-user: #1f7f75; --bubble-user-text: #ffffff;
+      --chip-bg: #262c35; --warn-bg: #3a2c12; --warn-border: #6b4f1c; --warn-text: #f5d08a;
+      --error-bg: #3b1d1d; --error-text: #f4a7a7;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; }
+  .app { height: 100dvh; display: flex; justify-content: center; padding: 24px 16px; }
+  .panel {
+    width: 100%; max-width: 860px; display: flex; flex-direction: column;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+
+  /* Encabezado */
+  .header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .logo { width: 40px; height: 40px; border-radius: 12px; background: var(--brand); color: #fff; display: grid; place-items: center; flex: none; }
+  .title { flex: 1; min-width: 0; }
+  .title h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  .status { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-muted); }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--online); }
+  .icon-btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--panel); cursor: pointer;
+    font-size: 13.5px; color: var(--text-muted);
+  }
+  .icon-btn:hover { color: var(--text); border-color: var(--text-muted); }
+  .icon-btn.square { width: 36px; padding: 0; justify-content: center; }
+  .settings { display: none; gap: 10px; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--chat-bg); font-size: 13px; color: var(--text-muted); flex-wrap: wrap; }
+  .settings.open { display: flex; }
+  .settings input { flex: 1; min-width: 200px; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; }
+  .settings a { color: var(--brand); }
+
+  /* Mensajes */
+  .log { flex: 1; overflow-y: auto; background: var(--chat-bg); padding: 24px 20px; display: flex; flex-direction: column; gap: 18px; scroll-behavior: smooth; }
+  .row { display: flex; gap: 10px; align-items: flex-start; max-width: 100%; }
+  .row.user { justify-content: flex-end; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; flex: none; }
+  .stack { display: flex; flex-direction: column; gap: 6px; max-width: min(78%, 620px); }
+  .row.user .stack { align-items: flex-end; }
+  .bubble { padding: 11px 15px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bot .bubble { background: var(--bubble-bot); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .user .bubble { background: var(--bubble-user); color: var(--bubble-user-text); border-bottom-right-radius: 4px; }
+  .time { font-size: 11.5px; color: var(--text-muted); padding: 0 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--chip-bg); color: var(--text-muted); }
+  .notice { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; padding: 9px 12px; border-radius: 10px; background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn-text); }
+  .notice.error { background: var(--error-bg); border-color: transparent; color: var(--error-text); }
+
+  /* Escribiendo… */
+  .typing { display: inline-flex; gap: 4px; padding: 14px 16px; }
+  .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); opacity: .4; animation: blink 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: .9; transform: translateY(-2px); } }
+
+  /* Bienvenida */
+  .welcome { margin: auto; text-align: center; max-width: 560px; padding: 12px 0; }
+  .welcome .logo { width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 14px; }
+  .welcome h2 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+  .welcome p { margin: 0 0 20px; color: var(--text-muted); }
+  .suggestions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; text-align: left; }
+  .suggestion { text-align: left; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); cursor: pointer; font-size: 13.5px; line-height: 1.4; transition: border-color .15s, transform .15s; }
+  .suggestion:hover { border-color: var(--brand); transform: translateY(-1px); }
+  .suggestion small { display: block; color: var(--text-muted); font-size: 12px; margin-bottom: 2px; }
+
+  /* Composer */
+  .composer { padding: 14px 18px 12px; border-top: 1px solid var(--border); background: var(--panel); }
+  .input-wrap { display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--chat-bg); transition: border-color .15s, box-shadow .15s; }
+  .input-wrap:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+  textarea { flex: 1; resize: none; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; padding: 7px 0; max-height: 160px; line-height: 1.5; }
+  textarea::placeholder { color: var(--text-muted); }
+  .send { width: 38px; height: 38px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; display: grid; place-items: center; cursor: pointer; flex: none; transition: background .15s; }
+  .send:hover:not(:disabled) { background: var(--brand-hover); }
+  .send:disabled { opacity: .45; cursor: not-allowed; }
+  .footnote { margin-top: 8px; text-align: center; font-size: 11.5px; color: var(--text-muted); }
+
+  @media (max-width: 640px) {
+    .app { padding: 0; }
+    .panel { border-radius: 0; border: 0; }
+    .hide-sm { display: none; }
+    .suggestions { grid-template-columns: 1fr; }
+    .stack { max-width: 85%; }
+    .log { padding: 18px 14px; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1>TiendaHogar · Asistente de soporte</h1>
-    <p>Prototipo: garantías, devoluciones, envíos, reembolsos y estado de pedidos (ORD-1001…ORD-1004). <a href="/docs">API docs</a></p>
-  </header>
-  <div class="chips" id="chips"></div>
-  <div id="log"></div>
-  <form id="f">
-    <input id="key" type="password" placeholder="API key (si aplica)" autocomplete="off">
-    <input id="q" placeholder="Escribe tu pregunta…" autocomplete="off" required>
-    <button id="b">Enviar</button>
-  </form>
-</main>
+<div class="app">
+  <main class="panel" aria-label="Chat de soporte de TiendaHogar">
+    <header class="header">
+      <div class="logo" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>
+      </div>
+      <div class="title">
+        <h1>TiendaHogar</h1>
+        <div class="status">Asistente de soporte · En línea</div>
+      </div>
+      <button class="icon-btn" id="newChat" type="button" title="Nueva conversación">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span class="hide-sm">Nueva conversación</span>
+      </button>
+      <button class="icon-btn square" id="toggleSettings" type="button" title="Ajustes" aria-expanded="false" aria-controls="settings">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </header>
+
+    <div class="settings" id="settings">
+      <label for="key">API key de la demo</label>
+      <input id="key" type="password" placeholder="Solo si el servidor la exige" autocomplete="off">
+      <a href="/docs" target="_blank" rel="noopener">Documentación de la API</a>
+    </div>
+
+    <section class="log" id="log" aria-live="polite"></section>
+
+    <footer class="composer">
+      <form class="input-wrap" id="form">
+        <textarea id="q" rows="1" placeholder="Escribe tu mensaje…" aria-label="Mensaje" maxlength="2000"></textarea>
+        <button class="send" id="send" type="submit" aria-label="Enviar" disabled>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </form>
+      <div class="footnote">Respuestas generadas con IA a partir de las políticas de TiendaHogar. Casos sensibles: soporte@tiendahogar.example</div>
+    </footer>
+  </main>
+</div>
+
 <script>
-  const examples = ["¿Cuánto dura la garantía de una refrigeradora?", "¿Dónde está mi pedido ORD-1001?", "¿Y el pedido ORD-9999?",
-    "Quiero un reembolso de $800 por mi lavadora", "Un empleado me trató muy mal en la tienda", "¿Cuánto cuesta una refrigeradora?", "¿Venden televisores?"];
-  const log = document.getElementById("log"), q = document.getElementById("q"), b = document.getElementById("b"), key = document.getElementById("key");
-  let sessionId = null;
+  const SUGGESTIONS = [
+    ["Garantías", "¿Cuánto dura la garantía de una refrigeradora?"],
+    ["Pedidos", "¿Dónde está mi pedido ORD-1001?"],
+    ["Devoluciones", "¿Puedo devolver una licuadora sin usar que compré hace 10 días?"],
+    ["Envíos", "¿Hacen envíos internacionales?"],
+    ["Reembolsos", "Quiero un reembolso de $800 por mi lavadora"],
+    ["Atención", "Un empleado me trató muy mal en la tienda"],
+  ];
+  const ICONS = {
+    bot: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
+    doc: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>',
+    tool: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg>',
+    person: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+  };
+  const TOOL_LABELS = { consultar_estado_pedido: "Consulta de pedido", escalar_a_humano: "Escalamiento" };
+
+  const log = document.getElementById("log"), form = document.getElementById("form");
+  const q = document.getElementById("q"), send = document.getElementById("send"), key = document.getElementById("key");
+  const settings = document.getElementById("settings"), toggle = document.getElementById("toggleSettings");
+  let sessionId = null, busy = false;
+
   try { key.value = localStorage.getItem("th_key") || ""; } catch (e) {}
-  for (const ex of examples) { const c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = ex; c.onclick = () => { q.value = ex; send(); }; document.getElementById("chips").append(c); }
-  function add(text, cls, meta) {
-    const d = document.createElement("div"); d.className = "msg " + cls; d.textContent = text;
-    if (meta) { const m = document.createElement("div"); m.className = "meta"; m.textContent = meta; d.append(m); }
-    log.append(d); log.scrollTop = log.scrollHeight;
+  key.addEventListener("change", () => { try { localStorage.setItem("th_key", key.value); } catch (e) {} });
+  toggle.onclick = () => { const open = settings.classList.toggle("open"); toggle.setAttribute("aria-expanded", open); if (open) key.focus(); };
+  document.getElementById("newChat").onclick = () => { sessionId = null; renderWelcome(); q.focus(); };
+
+  const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html) n.innerHTML = html; return n; };
+  const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const scroll = () => { log.scrollTop = log.scrollHeight; };
+
+  function renderWelcome() {
+    log.innerHTML = "";
+    const w = el("div", "welcome");
+    w.append(el("div", "logo", ICONS.bot.replace(/16/g, "24")));
+    const h = el("h2"); h.textContent = "Hola, ¿en qué te podemos ayudar?"; w.append(h);
+    const p = el("p"); p.textContent = "Resuelvo dudas sobre garantías, devoluciones, envíos, reembolsos y el estado de tus pedidos."; w.append(p);
+    const grid = el("div", "suggestions");
+    for (const [cat, text] of SUGGESTIONS) {
+      const b = el("button", "suggestion"); b.type = "button";
+      const s = el("small"); s.textContent = cat; b.append(s, document.createTextNode(text));
+      b.onclick = () => { q.value = text; submit(); };
+      grid.append(b);
+    }
+    w.append(grid); log.append(w);
   }
-  async function send() {
-    const text = q.value.trim(); if (!text) return;
-    add(text, "user"); q.value = ""; b.disabled = true;
-    try { localStorage.setItem("th_key", key.value); } catch (e) {}
+
+  function addMessage(text, who, extras) {
+    log.querySelector(".welcome")?.remove();
+    const row = el("div", "row " + who);
+    if (who === "bot") row.append(el("div", "avatar", ICONS.bot));
+    const stack = el("div", "stack");
+    const bubble = el("div", "bubble"); bubble.textContent = text; stack.append(bubble);
+    if (extras) stack.append(...extras);
+    const t = el("div", "time"); t.textContent = now(); stack.append(t);
+    row.append(stack); log.append(row); scroll();
+  }
+
+  function addNotice(text, isError) {
+    const row = el("div", "row bot");
+    row.append(el("div", "avatar", isError ? "!" : ICONS.person));
+    const n = el("div", "notice" + (isError ? " error" : "")); n.textContent = text;
+    const stack = el("div", "stack"); stack.append(n); row.append(stack); log.append(row); scroll();
+  }
+
+  function showTyping() {
+    const row = el("div", "row bot typing-row");
+    row.append(el("div", "avatar", ICONS.bot));
+    const b = el("div", "bubble typing"); b.innerHTML = "<span></span><span></span><span></span>";
+    row.append(b); log.append(row); scroll();
+    return () => row.remove();
+  }
+
+  function metaChips(data) {
+    const chips = el("div", "chips");
+    for (const s of data.sources) { const c = el("span", "chip", ICONS.doc); c.append(document.createTextNode(s.title)); c.title = "Relevancia " + s.score; chips.append(c); }
+    for (const t of data.tool_calls) { const c = el("span", "chip", ICONS.tool); c.append(document.createTextNode(TOOL_LABELS[t.tool] || t.tool)); c.title = JSON.stringify(t.input); chips.append(c); }
+    return chips.childElementCount ? [chips] : [];
+  }
+
+  async function submit() {
+    const text = q.value.trim();
+    if (!text || busy) return;
+    busy = true; q.value = ""; autosize(); send.disabled = true;
+    addMessage(text, "user");
+    const hideTyping = showTyping();
     try {
-      const headers = { "Content-Type": "application/json" }; if (key.value) headers["X-API-Key"] = key.value;
+      const headers = { "Content-Type": "application/json" };
+      if (key.value) headers["X-API-Key"] = key.value;
       const r = await fetch("/chat", { method: "POST", headers, body: JSON.stringify({ message: text, session_id: sessionId }) });
-      const data = await r.json();
-      if (!r.ok) { add("Error: " + (data.detail || r.status), "escalated"); return; }
+      const data = await r.json().catch(() => ({}));
+      hideTyping();
+      if (!r.ok) {
+        const msg = r.status === 401 ? "Se requiere una API key válida. Ábrela en Ajustes (icono de engrane)." : (data.detail || "Ocurrió un error (" + r.status + ").");
+        addNotice(msg, true);
+        if (r.status === 401) { settings.classList.add("open"); key.focus(); }
+        return;
+      }
       sessionId = data.session_id;
-      const meta = [];
-      if (data.sources.length) meta.push("Fuentes: " + data.sources.map(s => `${s.title} (${s.score})`).join(", "));
-      if (data.tool_calls.length) meta.push("Tools: " + data.tool_calls.map(t => `${t.tool}(${JSON.stringify(t.input)})`).join(", "));
-      if (data.escalated) meta.push("Escalado: " + data.escalation.category + " [" + data.escalation.source + "]");
-      add(data.answer, data.escalated ? "escalated" : "", meta.join(" · "));
-    } catch (e) { add("Error de red: " + e, "escalated"); }
-    finally { b.disabled = false; q.focus(); }
+      addMessage(data.answer, "bot", metaChips(data));
+      if (data.escalated) addNotice("Tu caso fue remitido a un agente humano. Escríbenos a soporte@tiendahogar.example para darle seguimiento.");
+    } catch (e) {
+      hideTyping();
+      addNotice("No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo.", true);
+    } finally {
+      busy = false; send.disabled = !q.value.trim(); q.focus();
+    }
   }
-  document.getElementById("f").onsubmit = (e) => { e.preventDefault(); send(); };
+
+  function autosize() { q.style.height = "auto"; q.style.height = Math.min(q.scrollHeight, 160) + "px"; }
+  q.addEventListener("input", () => { autosize(); send.disabled = busy || !q.value.trim(); });
+  q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); } });
+  form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
+
+  renderWelcome();
+  q.focus();
 </script>
 </body>
 </html>
