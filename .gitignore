@@ -5,3 +5,6 @@ __pycache__/
 .env
 .models/
 reports/
+# Historial de conversaciones (datos de clientes): solo se versiona la carpeta
+conversations/*
+!conversations/.gitkeep

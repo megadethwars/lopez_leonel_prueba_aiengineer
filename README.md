@@ -108,6 +108,7 @@ El agente necesita una API key de Anthropic, que se configura en un archivo `.en
 | `KNOWLEDGE_BASE_DIR` | No | `data/knowledge_base` | Carpeta con los documentos `.txt` |
 | `SKILLS_DIR` | No | `skills` | Carpeta de skills de conversación |
 | `CONVERSATION_SKILL` | No | `atencion_al_cliente` | Skill que se carga en el system prompt |
+| `CONVERSATIONS_DIR` | No | `conversations` | Carpeta donde se guarda el historial (un JSON por conversación) |
 | `LOG_LEVEL` | No | `INFO` | `DEBUG` agrega los scores de todos los documentos en cada búsqueda |
 | `LOG_FORMAT` | No | `text` | `json`: una línea JSON por evento (para Azure Monitor, Datadog, ELK) |
 | `JUDGE_MODEL` | No | `claude-sonnet-5-5` | Modelo del juez en las pruebas de integración |
