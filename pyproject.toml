@@ -8,3 +8,6 @@ requires-python = ">=3.11"
 pythonpath = ["src", "tests"]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
+markers = ["integration: end-to-end con Claude real y juez LLM (requiere ANTHROPIC_API_KEY, consume tokens)"]
+# Por defecto solo unit tests (offline, sin costo). Integración: pytest -m integration
+addopts = "-m \"not integration\""
