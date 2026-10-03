@@ -1,11 +1,18 @@
-"""Configuración por variables de entorno (ver .env.example)."""
+"""Configuración por variables de entorno (ver .env.example).
+
+Solo la lee `bootstrap.py` (composition root): los adapters reciben sus
+parámetros explícitamente y el núcleo no conoce variables de entorno.
+"""
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _env(name: str, default: str) -> str:
@@ -28,6 +35,13 @@ class Settings:
     )
     retrieval_alpha: float = field(default_factory=lambda: float(_env("RETRIEVAL_ALPHA", "0.7")))
     max_tool_iterations: int = field(default_factory=lambda: int(_env("MAX_TOOL_ITERATIONS", "4")))
+    knowledge_base_dir: Path = field(
+        default_factory=lambda: Path(_env("KNOWLEDGE_BASE_DIR", str(_REPO_ROOT / "data" / "knowledge_base")))
+    )
+    skills_dir: Path = field(default_factory=lambda: Path(_env("SKILLS_DIR", str(_REPO_ROOT / "skills"))))
+    conversation_skill: str = field(
+        default_factory=lambda: _env("CONVERSATION_SKILL", "atencion_al_cliente")
+    )
 
 
 settings = Settings()
