@@ -1,43 +1,29 @@
-"""Guardrails deterministas (capa 1) para los casos que el agente NO debe resolver.
+"""Guardrails deterministas para los casos que el agente NO debe resolver.
 
-Fuente: Doc 4 (reembolsos > $500 requieren supervisor humano) y Doc 5 (quejas de
-trato, disputas de facturación y temas legales van a soporte humano).
+Reglas de negocio puras (sin I/O): Doc 4 (reembolsos > $500 requieren supervisor
+humano) y Doc 5 (quejas de trato, disputas de facturación y temas legales van a
+soporte humano).
 
-Capa 1 (este módulo): reglas regex sobre el mensaje del cliente, antes del LLM.
+Capa 1 (`check_input`): reglas regex sobre el mensaje del cliente, antes del LLM.
 Barato, auditable y testeable; si se activa, el LLM ni siquiera se invoca.
-Capa 2: la tool `escalar_a_humano` + system prompt, para casos que las reglas
-no capturan (paráfrasis, números escritos en letras, etc.).
-Capa 3 (salida): `check_output` impide que una respuesta "apruebe" un reembolso.
+Capa 2: la tool `escalar_a_humano` + system prompt (application/), para casos que
+las reglas no capturan (paráfrasis, números escritos en letras, etc.).
+Capa 3 (`check_output`): impide que una respuesta "apruebe" un reembolso.
 """
 
 import re
-import unicodedata
 from dataclasses import dataclass
-from enum import Enum
 
-from .knowledge_base import HUMAN_SUPPORT_EMAIL
+from .models import HUMAN_SUPPORT_EMAIL, EscalationCategory
+from .text import normalize
 
 REFUND_LIMIT = 500.0
-
-
-class EscalationCategory(str, Enum):
-    REEMBOLSO_MAYOR_500 = "reembolso_mayor_500"
-    QUEJA_TRATO_EMPLEADO = "queja_trato_empleado"
-    DISPUTA_FACTURACION = "disputa_facturacion"
-    TEMA_LEGAL = "tema_legal"
-    OTRO = "otro"
 
 
 @dataclass(frozen=True)
 class GuardrailResult:
     category: EscalationCategory
     reason: str
-
-
-def normalize(text: str) -> str:
-    """Minúsculas y sin tildes, para que las reglas no dependan de la ortografía."""
-    decomposed = unicodedata.normalize("NFKD", text or "")
-    return "".join(c for c in decomposed if not unicodedata.combining(c)).lower()
 
 
 _LEGAL = re.compile(
@@ -155,23 +141,3 @@ def check_output(answer: str) -> GuardrailResult | None:
             EscalationCategory.REEMBOLSO_MAYOR_500, "La respuesta intentaba aprobar un reembolso."
         )
     return None
-
-
-ESCALAR_A_HUMANO_TOOL = {
-    "name": "escalar_a_humano",
-    "description": (
-        "Remite el caso a un agente humano. Úsala SIEMPRE (en lugar de responder tú) cuando el "
-        "cliente: pida un reembolso mayor a $500; se queje del trato de un empleado; tenga una "
-        "disputa de facturación; o plantee cualquier tema legal."
-    ),
-    "strict": True,
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "categoria": {"type": "string", "enum": [c.value for c in EscalationCategory]},
-            "motivo": {"type": "string", "description": "Resumen breve del caso."},
-        },
-        "required": ["categoria", "motivo"],
-        "additionalProperties": False,
-    },
-}
