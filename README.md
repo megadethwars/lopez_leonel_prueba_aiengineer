@@ -68,8 +68,32 @@ tests/                     # pytest (no requieren API key)
 python -m venv .venv
 # Windows:  .venv\Scripts\activate      Linux/macOS:  source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # y completa ANTHROPIC_API_KEY
 ```
+
+### Configurar la API key (archivo `.env`)
+
+El agente necesita una API key de Anthropic, que se configura en un archivo `.env` en la raíz del proyecto (al mismo nivel que este README).
+
+> **Importante:** el `.env` se crea **a partir de la plantilla [`.env.example`](.env.example)**, que ya incluye todas las variables disponibles con sus valores por defecto.
+
+1. Copia la plantilla como `.env`:
+
+   ```bash
+   # Linux/macOS
+   cp .env.example .env
+   # Windows (PowerShell)
+   Copy-Item .env.example .env
+   ```
+
+2. Abre el `.env` y escribe tu propia API key en la variable `ANTHROPIC_API_KEY`:
+
+   ```
+   ANTHROPIC_API_KEY=sk-ant-tu-api-key-aqui
+   ```
+
+- La API key se obtiene en la [Claude Console](https://platform.claude.com), en **Settings → API Keys**.
+- El archivo `.env` está en `.gitignore`: **nunca lo subas al repositorio ni pegues la key en el código** (ni en `.env.example`, que sí se versiona).
+- Los unit tests (`pytest tests/`) no necesitan la key. Sin ella, el servidor arranca, pero las preguntas que requieren al LLM responden `503 LLM no configurado`.
 
 ### Variables de entorno
 
