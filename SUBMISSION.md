@@ -2,6 +2,8 @@
 
 ## Arquitectura propuesta y justificación
 
+> Diagramas editables en [docs/arquitectura.drawio](docs/arquitectura.drawio) (se abre en draw.io / diagrams.net): 1) arquitectura hexagonal, 2) flujo del agente en LangGraph, 3) mapeo a producción.
+
 ```mermaid
 flowchart LR
     U[Cliente<br/>web / curl / CLI] -->|POST /chat| API[FastAPI<br/>auth X-API-Key opcional]
@@ -129,6 +131,20 @@ pytest tests/
 | `test_architecture.py` | Reglas de dependencia de la hexagonal, verificadas sobre los imports del código: el dominio no depende de nada, los ports solo del dominio, la aplicación no conoce adapters ni frameworks, y los adapters de entrada no dependen de los de salida. |
 | `test_api.py` | Contrato HTTP de `/health` y `/chat`, y exigencia de `X-API-Key` cuando se configura. |
 
+### Pruebas de integración end-to-end con LLM-as-judge
+
+```bash
+pytest -m integration   # requiere ANTHROPIC_API_KEY; consume tokens
+```
+
+Sin una plataforma de evaluación externa (LangSmith u otra), el evaluador es **otro modelo de Claude** (`claude-sonnet-5-5`, distinto del agente `claude-opus-5-5`, para evitar la auto-preferencia), invocado con salidas estructuradas (`messages.parse` + Pydantic), así que el veredicto siempre es JSON válido.
+
+- **19 casos end-to-end** por HTTP real, en las categorías RAG, tool, guardrails, no inventar, prompt injection, empatía y multi-turno. Cada caso tiene **verificaciones deterministas** (escalamiento, tools, fuentes) y una **rúbrica atómica** que el juez califica criterio por criterio. La fidelidad (no inventar nada que no esté en los documentos o en la tabla de pedidos) se evalúa siempre, y el juez recibe esa información como verdad de referencia.
+- **Calibración del juez (8 casos):** debe reprobar respuestas malas conocidas, incluida una que intenta manipularlo con instrucciones dentro del texto, y aprobar una correcta.
+- **Reporte:** `reports/llm_eval_report.md` con el veredicto y la justificación de cada criterio.
+
+**Lo que encontró la primera corrida (13/19):** el agente agregaba detalles de procesos que no estaban en las fuentes ("el ID está en tu correo de confirmación", "un agente te acompaña en el proceso", "adjunta una foto del comprobante"). Son alucinaciones pequeñas que los unit tests no podían detectar. Se corrigió con una regla en el system prompt y el juez se ajustó para no penalizar la sugerencia de escribir a soporte, que es instrucción explícita del agente. Resultado: 18/18 más **1 fallo conocido** (`xfail`): para "reembolso de $300" la Política de devoluciones puntúa 0.15, debajo del umbral, y el agente responde que no conoce los requisitos. Es un problema de recall del RAG, documentado en Limitaciones.
+
 ## Cómo mapearías esto a producción
 
 Gracias a la arquitectura hexagonal, la mayor parte de la migración consiste en **escribir adapters nuevos para los ports existentes** y cambiar su conexión en `bootstrap.py`. El dominio, el grafo del agente, los guardrails y sus tests no cambian.
@@ -147,8 +163,9 @@ Gracias a la arquitectura hexagonal, la mayor parte de la migración consiste en
 
 - **Guardrail por reglas:** no detecta paráfrasis sin palabras clave ("el total no cuadra con lo que pagué"), montos escritos en letras ("ochocientos dólares") ni otros idiomas. Lo mitiga la tool `escalar_a_humano` del LLM, pero esa capa es probabilística. Puede haber falsos positivos (p. ej., "demanda" en otro sentido).
 - **Reembolsos > $500 sin monto explícito:** si el cliente pide el reembolso de una refrigeradora sin decir el precio, el agente no conoce el valor (no hay catálogo de precios) y depende del LLM. Supuesto: "remitir al canal humano" para reembolsos > $500 = soporte@tiendahogar.example (Doc 4 pide un supervisor humano pero no define un canal distinto).
+- **Recall del RAG en preguntas que cruzan políticas:** "quiero un reembolso de $300" recupera Reembolsos (doc4) pero no Devoluciones (doc2, score 0.15), y el agente dice no conocer los requisitos. Lo detectó la evaluación end-to-end (caso `xfail`). Correcciones posibles: RAG agéntico (una tool `buscar_politicas` para que el agente consulte de nuevo) o vincular documentos relacionados en el índice.
 - **Umbral calibrado con pocas preguntas** (unas 27, escritas por mí). Con tráfico real se debe recalibrar con un set etiquetado. Las preguntas limítrofes que comparten vocabulario pasan al LLM y dependen de su obediencia al system prompt.
-- **Pruebas con LLM falso:** los tests validan la orquestación, no la calidad de las respuestas de Claude. No se incluyó una evaluación automática (LLM-as-judge) de groundedness.
+- **Evaluación con juez LLM sin calibración humana:** el juez se valida con respuestas malas conocidas, pero no contra un set etiquetado por humanos. Además, el juez y el agente no son deterministas: un caso puede variar entre corridas, y conviene repetir la suite antes de sacar conclusiones de un solo resultado.
 - **Estado en memoria:** conversaciones e índice se pierden al reiniciar, no se comparten entre réplicas y no tienen TTL ni límite de longitud de historial.
 - **Sin autenticación de usuario final:** cualquiera con la API key de demo puede consultar cualquier `order_id`. En producción, la tool debe validar que el pedido pertenece al cliente autenticado.
 - **Fechas:** la garantía y la ventana de 30 días dependen de la fecha de compra, que el sistema no conoce. El agente solo puede explicar la política.
