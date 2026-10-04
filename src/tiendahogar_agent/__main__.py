@@ -8,7 +8,7 @@ from .logging_config import setup_logging
 setup_logging(os.getenv("LOG_LEVEL") or "WARNING")
 
 from .adapters.inbound.cli import run_cli  # noqa: E402
-from .bootstrap import build_support_agent  # noqa: E402
+from .bootstrap import build_chat_service  # noqa: E402
 
 if __name__ == "__main__":
-    run_cli(build_support_agent())
+    run_cli(build_chat_service())

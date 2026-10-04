@@ -2,7 +2,10 @@ from typing import Any
 
 import pytest
 
-from tiendahogar_agent.bootstrap import build_retriever, build_support_agent
+from tiendahogar_agent.adapters.outbound.conversations.json_file_repository import (
+    JsonFileConversationRepository,
+)
+from tiendahogar_agent.bootstrap import build_chat_service, build_retriever, build_support_agent
 
 
 @pytest.fixture(scope="session")
@@ -41,6 +44,14 @@ class RecordingNotifier:
 def make_agent(llm, retriever, **overrides):
     """Agente real armado por el composition root, con el LLM (y otros ports) sustituidos."""
     return build_support_agent(llm=llm, retriever=retriever, **overrides)
+
+
+def make_chat(llm, retriever, conversations_dir, **overrides):
+    """Caso de uso de chat completo (agente + historial en JSON) con el LLM sustituido."""
+    return build_chat_service(
+        agent=make_agent(llm, retriever, **overrides),
+        conversation_repository=JsonFileConversationRepository(conversations_dir),
+    )
 
 
 def text_response(text: str) -> dict:

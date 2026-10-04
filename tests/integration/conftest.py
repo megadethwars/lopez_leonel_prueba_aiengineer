@@ -14,7 +14,10 @@ from fastapi.testclient import TestClient
 
 from integration.judge import ClaudeJudge
 from tiendahogar_agent.adapters.inbound.http.api import create_app
-from tiendahogar_agent.bootstrap import build_support_agent
+from tiendahogar_agent.adapters.outbound.conversations.json_file_repository import (
+    JsonFileConversationRepository,
+)
+from tiendahogar_agent.bootstrap import build_chat_service
 from tiendahogar_agent.config import settings
 
 REPORT_DIR = Path(__file__).resolve().parents[2] / "reports"
@@ -31,10 +34,13 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture(scope="session")
-def client():
-    """Microservicio real en proceso: HTTP → FastAPI → LangGraph → Claude + RAG + tools."""
+def client(tmp_path_factory):
+    """Microservicio real en proceso: HTTP → FastAPI → LangGraph → Claude + RAG + tools.
+    El historial se guarda en una carpeta temporal para no mezclarlo con conversations/."""
     os.environ.pop("DEMO_API_KEY", None)
-    with TestClient(create_app(agent_factory=build_support_agent)) as c:
+    repo = JsonFileConversationRepository(tmp_path_factory.mktemp("conversations"))
+    app = create_app(service_factory=lambda: build_chat_service(conversation_repository=repo))
+    with TestClient(app) as c:
         yield c
 
 

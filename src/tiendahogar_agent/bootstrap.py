@@ -11,11 +11,13 @@ cambia aquí la línea que lo construye. Dominio y aplicación no se tocan.
     OrderRepositoryPort      InMemoryOrderRepository (mock)      API del OMS detrás de Apigee
     SkillRepositoryPort      FileSystemSkillRepository (.md)     Servicio de gestión de prompts
     EscalationNotifierPort   LoggingEscalationNotifier           Productor Kafka
+    ConversationRepositoryPort  JsonFileConversationRepository   Cosmos DB / PostgreSQL
 """
 
 from functools import lru_cache
 from typing import Any
 
+from .adapters.outbound.conversations.json_file_repository import JsonFileConversationRepository
 from .adapters.outbound.knowledge.filesystem_knowledge_source import FileSystemKnowledgeSource
 from .adapters.outbound.llm.anthropic_llm import AnthropicLLM
 from .adapters.outbound.notifications.logging_escalation_notifier import LoggingEscalationNotifier
@@ -23,12 +25,14 @@ from .adapters.outbound.orders.in_memory_order_repository import InMemoryOrderRe
 from .adapters.outbound.retrieval.embeddings import FastEmbedEmbedder
 from .adapters.outbound.retrieval.hybrid_retriever import HybridRetriever
 from .adapters.outbound.skills.filesystem_skill_repository import FileSystemSkillRepository
+from .application.chat_service import ChatService
 from .application.order_status import OrderStatusService
 from .application.prompts import build_system_prompt
 from .application.support_agent import SupportAgent
 from .application.tools import build_tool_registry
 from .config import Settings, settings
 from .ports import (
+    ConversationRepositoryPort,
     EscalationNotifierPort,
     KnowledgeSourcePort,
     LLMPort,
@@ -75,6 +79,19 @@ def build_support_agent(
         notifier=notifier or LoggingEscalationNotifier(),
         checkpointer=checkpointer,
         max_tool_iterations=config.max_tool_iterations,
+    )
+
+
+def build_chat_service(
+    *,
+    agent: SupportAgent | None = None,
+    conversation_repository: ConversationRepositoryPort | None = None,
+    config: Settings = settings,
+) -> ChatService:
+    """Caso de uso de chat (agente + historial de conversaciones)."""
+    return ChatService(
+        agent=agent or build_support_agent(config=config),
+        conversations=conversation_repository or JsonFileConversationRepository(config.conversations_dir),
     )
 
 
