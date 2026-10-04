@@ -24,14 +24,16 @@ src/tiendahogar_agent/
     orders.py              #   OrderRepositoryPort
     skills.py              #   SkillRepositoryPort
     notifications.py       #   EscalationNotifierPort
+    conversations.py       #   ConversationRepositoryPort
   application/             # CASOS DE USO — dependen solo de domain + ports
     support_agent.py       #   grafo LangGraph: guardrail → RAG → agente ⇄ tools → guardrail de salida
+    chat_service.py        #   ChatService: turno del agente + historial de conversaciones
     order_status.py        #   consultar_estado_pedido(order_id: str) -> dict
     tools.py               #   ToolRegistry + esquemas de tools (consultar pedido, escalar)
     prompts.py             #   reglas de seguridad + skill → system prompt
   adapters/
     inbound/               # ENTRADA — cómo llegan las peticiones
-      http/api.py          #   FastAPI: POST /chat, GET /health, GET / (chat web), /docs
+      http/api.py          #   FastAPI: POST /chat, /conversations, GET /health, GET / (chat web), /docs
       cli.py               #   chat en terminal
     outbound/              # SALIDA — implementaciones de los ports
       llm/                 #   AnthropicLLM (Claude, SDK oficial)
@@ -40,6 +42,7 @@ src/tiendahogar_agent/
       orders/              #   InMemoryOrderRepository (tabla mock)
       skills/              #   FileSystemSkillRepository (SKILL.md)
       notifications/       #   LoggingEscalationNotifier
+      conversations/       #   JsonFileConversationRepository (un JSON por conversación)
   bootstrap.py             # COMPOSITION ROOT — conecta cada port con su adapter
   main.py                  # entrypoint ASGI (uvicorn)
   __main__.py              # entrypoint CLI (python -m tiendahogar_agent)
@@ -55,6 +58,7 @@ tests/                     # pytest (no requieren API key)
 | `OrderRepositoryPort` | `InMemoryOrderRepository` | API del OMS detrás de Apigee |
 | `SkillRepositoryPort` | `FileSystemSkillRepository` | Servicio de gestión de prompts |
 | `EscalationNotifierPort` | `LoggingEscalationNotifier` | Productor Kafka `support.escalation.created` |
+| `ConversationRepositoryPort` | `JsonFileConversationRepository` (`conversations/*.json`) | Cosmos DB / PostgreSQL |
 
 ## Requisitos
 
@@ -100,19 +104,7 @@ El agente necesita una API key de Anthropic, que se configura en un archivo `.en
 | Variable | Requerida | Default | Descripción |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Sí, para el agente | — | API key de Anthropic |
-| `ANTHROPIC_MODEL` | No | `claude-opus-5-5` | Modelo de Claude |
-| `ANTHROPIC_EFFORT` | No | `low` | Esfuerzo de razonamiento (`low`…`max`) |
-| `RETRIEVAL_TOP_K` | No | `3` | Máximo de documentos por pregunta |
-| `RETRIEVAL_THRESHOLD` | No | `0.25` | Score híbrido mínimo para usar un documento |
-| `RETRIEVAL_ALPHA` | No | `0.7` | Peso del componente denso en el score híbrido |
-| `KNOWLEDGE_BASE_DIR` | No | `data/knowledge_base` | Carpeta con los documentos `.txt` |
-| `SKILLS_DIR` | No | `skills` | Carpeta de skills de conversación |
-| `CONVERSATION_SKILL` | No | `atencion_al_cliente` | Skill que se carga en el system prompt |
-| `CONVERSATIONS_DIR` | No | `conversations` | Carpeta donde se guarda el historial (un JSON por conversación) |
-| `LOG_LEVEL` | No | `INFO` | `DEBUG` agrega los scores de todos los documentos en cada búsqueda |
-| `LOG_FORMAT` | No | `text` | `json`: una línea JSON por evento (para Azure Monitor, Datadog, ELK) |
-| `JUDGE_MODEL` | No | `claude-sonnet-5-5` | Modelo del juez en las pruebas de integración |
-| `DEMO_API_KEY` | No | — | Si se define, `POST /chat` exige el header `X-API-Key` |
+
 
 ## Correr los tests
 
@@ -178,10 +170,43 @@ $env:PYTHONPATH="src"; python -m tiendahogar_agent
 
 **Docker:**
 
+Forma recomendada (incluye el `.env` y el volumen del historial):
+
+```bash
+docker compose up --build
+```
+
+El historial de conversaciones **no se empaqueta en la imagen** (son datos de clientes y la imagen es inmutable): `docker-compose.yml` monta la carpeta `conversations/` del proyecto dentro del contenedor, así que sobrevive a reinicios y a reconstrucciones de la imagen.
+
+> ⚠️ Si se ejecuta la imagen **sin volumen** (por ejemplo con el botón *Run* de Docker Desktop sin configurar *Volumes*, o con `docker run` sin `-v`), cada contenedor nuevo empieza con el historial vacío.
+
+Con `docker run` directamente:
+
 ```bash
 docker build -t tiendahogar-agent .
-docker run -p 8000:8000 --env-file .env tiendahogar-agent
+# Linux/macOS
+docker run -p 8000:8000 --env-file .env -v "$(pwd)/conversations:/app/conversations" tiendahogar-agent
+# Windows (PowerShell)
+docker run -p 8000:8000 --env-file .env -v "${PWD}/conversations:/app/conversations" tiendahogar-agent
 ```
+
+#sin historial de converaciones
+
+# Windows (PowerShell)
+docker run -p 8000:8000 --env-file .env tiendahogar-agent
+
+
+### Historial de conversaciones
+
+Cada conversación se guarda como `conversations/<id>.json` (pregunta, respuesta, fuentes, tools y escalamiento de cada turno). El chat web muestra el historial en el panel izquierdo: se puede abrir, continuar o eliminar cada conversación, y la URL (`/#<id>`) conserva la conversación activa al recargar la página. Si el servidor se reinicia, al continuar una conversación el agente recupera el contexto desde el historial.
+
+| Endpoint | Descripción |
+|---|---|
+| `GET /conversations` | Lista de conversaciones (más reciente primero) |
+| `GET /conversations/{id}` | Conversación completa con todos sus mensajes |
+| `DELETE /conversations/{id}` | Elimina la conversación |
+
+Los JSON contienen datos de clientes: están en `.gitignore` (solo se versiona la carpeta vacía).
 
 ## Preguntas de ejemplo
 
