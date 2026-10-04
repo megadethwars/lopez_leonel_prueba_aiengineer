@@ -7,6 +7,7 @@ datos, una API, un broker) se escribe un adapter que cumpla el port, sin tocar
 el núcleo.
 """
 
+from .conversations import ConversationRepositoryPort
 from .knowledge import KnowledgeSourcePort
 from .llm import (
     LLMConnectionError,
@@ -23,6 +24,7 @@ from .retrieval import RetrieverPort
 from .skills import SkillRepositoryPort
 
 __all__ = [
+    "ConversationRepositoryPort",
     "EscalationNotifierPort",
     "KnowledgeSourcePort",
     "LLMConnectionError",

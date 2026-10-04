@@ -39,6 +39,9 @@ class Settings:
         default_factory=lambda: Path(_env("KNOWLEDGE_BASE_DIR", str(_REPO_ROOT / "data" / "knowledge_base")))
     )
     skills_dir: Path = field(default_factory=lambda: Path(_env("SKILLS_DIR", str(_REPO_ROOT / "skills"))))
+    conversations_dir: Path = field(
+        default_factory=lambda: Path(_env("CONVERSATIONS_DIR", str(_REPO_ROOT / "conversations")))
+    )
     conversation_skill: str = field(
         default_factory=lambda: _env("CONVERSATION_SKILL", "atencion_al_cliente")
     )

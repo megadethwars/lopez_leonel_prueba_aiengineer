@@ -2,11 +2,11 @@
 
 import uuid
 
-from ...application.support_agent import SupportAgent
+from ...application.chat_service import ChatService
 
 
-def run_cli(agent: SupportAgent) -> None:
-    session_id = str(uuid.uuid4())
+def run_cli(chat: ChatService) -> None:
+    session_id = uuid.uuid4().hex
     print("TiendaHogar — asistente de soporte. Escribe 'salir' para terminar.\n")
     while True:
         try:
@@ -17,7 +17,7 @@ def run_cli(agent: SupportAgent) -> None:
             break
         if not question:
             continue
-        result = agent.ask(question, session_id=session_id)
+        result = chat.ask(question, session_id=session_id)
         print(f"\nAsistente: {result['answer']}")
         if result["sources"]:
             print("  fuentes:", ", ".join(f"{s['title']} ({s['score']})" for s in result["sources"]))

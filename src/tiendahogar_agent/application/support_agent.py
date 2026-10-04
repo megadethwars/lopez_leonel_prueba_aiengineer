@@ -214,7 +214,19 @@ class SupportAgent:
                                  max_tool_iterations)
         self._notifier = notifier
 
-    def ask(self, question: str, session_id: str) -> dict[str, Any]:
+    def has_memory(self, session_id: str) -> bool:
+        """True si el checkpointer conserva el historial de esta sesión."""
+        state = self.graph.get_state({"configurable": {"thread_id": session_id}})
+        return bool(state.values.get("messages"))
+
+    def ask(
+        self,
+        question: str,
+        session_id: str,
+        prior_turns: list[tuple[str, str]] | None = None,
+    ) -> dict[str, Any]:
+        """Procesa un turno. `prior_turns` (pregunta, respuesta) se usa solo si el agente no
+        recuerda la sesión (p. ej. tras un reinicio) para restaurar el contexto."""
         turn_input: AgentState = {
             "question": question, "sources": [], "escalation": None,
             "tool_calls": [], "tool_iterations": 0, "answer": "",
@@ -223,6 +235,16 @@ class SupportAgent:
         started = time.perf_counter()
         try:
             logger.info("Pregunta recibida: %r", preview(question))
+            if prior_turns and not self.has_memory(session_id):
+                logger.info("Restaurando contexto de %d turno(s) previos desde el historial",
+                            len(prior_turns))
+                # Sin bloque <contexto>: marcarlo como "sin documentos" haría creer al modelo
+                # que antes respondió sin fuentes.
+                turn_input["messages"] = [
+                    msg for q, a in prior_turns
+                    for msg in ({"role": "user", "content": f"<pregunta_cliente>\n{q}\n</pregunta_cliente>"},
+                                _assistant_text(a))
+                ]
             state = self.graph.invoke(turn_input, config={"configurable": {"thread_id": session_id}})
             escalation = state.get("escalation")
             if escalation:
