@@ -1,0 +1,13 @@
+# Levanta el microservicio con la configuración y el historial persistentes:
+#   docker compose up --build
+# El historial se guarda en ./conversations (fuera de la imagen) y sobrevive a reinicios.
+services:
+  tiendahogar-agent:
+    build: .
+    image: tiendahogar-agent
+    ports:
+      - "8000:8000"
+    env_file: .env
+    volumes:
+      - ./conversations:/app/conversations
+    restart: unless-stopped

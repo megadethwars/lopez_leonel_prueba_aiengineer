@@ -15,7 +15,9 @@ COPY skills ./skills
 # Pre-descarga el modelo de embeddings en la imagen (arranque rápido, sin red en runtime).
 RUN python -c "from tiendahogar_agent.bootstrap import build_retriever; build_retriever()"
 
-RUN useradd --create-home appuser && chown -R appuser /app
+# Carpeta del historial: se monta como volumen (los datos nunca van dentro de la imagen).
+# Se crea aquí para que el volumen herede los permisos del usuario sin privilegios.
+RUN mkdir -p /app/conversations && useradd --create-home appuser && chown -R appuser /app
 USER appuser
 
 EXPOSE 8000
