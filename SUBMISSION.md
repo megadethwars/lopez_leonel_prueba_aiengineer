@@ -69,11 +69,11 @@ flowchart LR
 
 | Capa | Contenido | Puede depender de |
 |---|---|---|
-| `domain/` | `Document`, `Order`, `Escalation`, guardrails deterministas (reglas de Doc 4 y Doc 5) | nada (Python puro) |
-| `ports/` | `LLMPort` (+ errores `LLMError`), `RetrieverPort`, `KnowledgeSourcePort`, `OrderRepositoryPort`, `SkillRepositoryPort`, `EscalationNotifierPort` | `domain` |
-| `application/` | `SupportAgent` (grafo LangGraph), `OrderStatusService` (`consultar_estado_pedido(order_id: str) -> dict`), `ToolRegistry`, prompts | `domain`, `ports` |
-| `adapters/inbound/` | FastAPI (`/chat`, `/health`, chat web, OpenAPI, API key opcional), CLI | `application`, `ports` |
-| `adapters/outbound/` | Claude (SDK `anthropic`), retriever híbrido + fastembed, `.txt`, `SKILL.md`, pedidos mock, notificador | `domain`, `ports` |
+| `domain/` | `Document`, `Order`, `Escalation`, `Conversation`, guardrails deterministas (reglas de Doc 4 y Doc 5) | nada (Python puro) |
+| `ports/` | `LLMPort` (+ errores `LLMError`), `RetrieverPort`, `KnowledgeSourcePort`, `OrderRepositoryPort`, `SkillRepositoryPort`, `EscalationNotifierPort`, `ConversationRepositoryPort` | `domain` |
+| `application/` | `SupportAgent` (grafo LangGraph), `ChatService` (turno + historial), `OrderStatusService` (`consultar_estado_pedido(order_id: str) -> dict`), `ToolRegistry`, prompts | `domain`, `ports` |
+| `adapters/inbound/` | FastAPI (`/chat`, `/conversations`, `/health`, chat web con historial, OpenAPI, API key opcional), CLI | `application`, `ports` |
+| `adapters/outbound/` | Claude (SDK `anthropic`), retriever híbrido + fastembed, `.txt`, `SKILL.md`, pedidos mock, notificador, historial en JSON | `domain`, `ports` |
 | `bootstrap.py` | Conecta cada port con su adapter a partir de `config.py` | todo |
 
 `tests/test_architecture.py` analiza los imports del código fuente y falla si una capa interna depende de una externa. Por ejemplo: el dominio importando FastAPI, la aplicación importando un adapter, o la API HTTP importando el SDK de Anthropic.
@@ -82,6 +82,7 @@ flowchart LR
 
 - **Guardrails en tres capas:** (1) reglas regex de dominio antes del LLM; (2) la tool `escalar_a_humano` + system prompt para paráfrasis que las reglas no ven; (3) un control de salida que bloquea cualquier respuesta que "apruebe" un reembolso y garantiza que toda escalación incluya el canal humano. Cada escalamiento se publica por `EscalationNotifierPort`; si la notificación falla, la respuesta al cliente no se interrumpe.
 - **Skill de conversación** (`skills/atencion_al_cliente/SKILL.md`): tono, empatía, saludos y formato, editables por negocio o CX sin tocar código. Se anexa al system prompt **después** de las reglas de seguridad, que viven en `application/prompts.py` y prevalecen ante cualquier conflicto.
+- **Historial de conversaciones** (`ChatService` + `ConversationRepositoryPort`): cada turno se guarda con su metadata en un JSON por conversación. Si el servidor se reinicia y la conversación continúa, el agente recibe los turnos previos desde el historial. Un fallo al guardar el historial no interrumpe la respuesta.
 - **`ToolRegistry`:** agregar una tool nueva (p. ej. inventario vía otro microservicio) es registrar su esquema y su handler en `bootstrap.py`, sin tocar el grafo.
 
 **Por qué este diseño**
@@ -117,7 +118,7 @@ Comando exacto (desde la raíz del repo, con dependencias instaladas):
 pytest tests/
 ```
 
-69 tests en unos 5 segundos. No requieren API key: usan el retriever real con embeddings locales y adapters falsos para el LLM y el notificador.
+86 tests en unos 5 segundos. No requieren API key: usan el retriever real con embeddings locales y adapters falsos para el LLM y el notificador.
 
 | Archivo | Qué cubre |
 |---|---|
@@ -129,6 +130,7 @@ pytest tests/
 | `test_conversation_skill.py` | La skill se carga sin frontmatter y se inyecta después de las reglas de seguridad. Los saludos y agradecimientos llegan al LLM, y un mensaje fuera de dominio que empieza con "hola" no se trata como saludo. |
 | `test_logging.py` | El RAG, las tools y los escalamientos quedan registrados con el `session_id` del turno. |
 | `test_architecture.py` | Reglas de dependencia de la hexagonal, verificadas sobre los imports del código: el dominio no depende de nada, los ports solo del dominio, la aplicación no conoce adapters ni frameworks, y los adapters de entrada no dependen de los de salida. |
+| `test_conversations.py` | Historial: título y turnos (dominio); guardado, lectura, orden y borrado en JSON, sin salir de la carpeta ante IDs maliciosos (adapter); cada turno queda registrado con su metadata, la conversación **continúa tras un reinicio** y un fallo del historial no rompe la respuesta (caso de uso); endpoints `/conversations` y validación del `session_id` (HTTP). |
 | `test_api.py` | Contrato HTTP de `/health` y `/chat`, y exigencia de `X-API-Key` cuando se configura. |
 
 ### Pruebas de integración end-to-end con LLM-as-judge
@@ -155,7 +157,7 @@ Gracias a la arquitectura hexagonal, la mayor parte de la migración consiste en
 | 5 documentos en memoria + fastembed | **Databricks**: los documentos fuente como tablas Delta en **Unity Catalog** (gobierno, linaje y permisos por grupo). Un pipeline de ingesta hace el chunking y los embeddings y alimenta un índice de **Mosaic AI Vector Search** con *Delta Sync* (re-indexación automática), usando búsqueda híbrida y filtros por metadatos. El retriever del agente pasa a ser un cliente de ese índice o una tool expuesta vía Unity Catalog functions. El umbral se re-calibra con un set de evaluación en MLflow. |
 | `consultar_estado_pedido` con tabla mock | Llamada al OMS real expuesta y protegida en **Apigee**: OAuth2 o mTLS, cuotas, rate limiting, caching corto y versionado. El agente solo conoce el proxy de Apigee, y el propio `/chat` del agente se publica también detrás de Apigee para los canales (web, app, WhatsApp). |
 | Escalamiento como respuesta con email | Además de responder, el nodo de escalamiento publica un evento `support.escalation.created` en **Kafka** (categoría, motivo, `session_id` y transcript con PII enmascarada). Lo consume el sistema de ticketing o CRM, que asigna un agente humano o supervisor (p. ej., aprobación de reembolsos > $500). Otros eventos: `support.conversation.completed` para analítica y evaluación offline, y `kb.document.updated` para disparar la re-indexación. |
-| `InMemorySaver` | Checkpointer persistente (Postgres, Cosmos DB o Redis) para conversaciones multi-instancia y auditoría. |
+| `InMemorySaver` + historial en `conversations/*.json` | Checkpointer persistente y un adapter de `ConversationRepositoryPort` sobre Cosmos DB o PostgreSQL, para conversaciones multi-instancia, retención y auditoría. |
 | Logs locales | Trazas OpenTelemetry/MLflow por nodo (retrieval, scores, tools, guardrails), dashboards de tasa de escalamiento y "sin respuesta", y evaluación continua (groundedness y precisión de escalamiento) en Databricks. |
 | Guardrails regex | Se mantienen como primera capa determinista y se complementan con Azure AI Content Safety / Prompt Shields para prompt injection y contenido dañino, más un clasificador de intención entrenado con datos reales. |
 
@@ -167,6 +169,7 @@ Gracias a la arquitectura hexagonal, la mayor parte de la migración consiste en
 - **Umbral calibrado con pocas preguntas** (unas 27, escritas por mí). Con tráfico real se debe recalibrar con un set etiquetado. Las preguntas limítrofes que comparten vocabulario pasan al LLM y dependen de su obediencia al system prompt.
 - **Evaluación con juez LLM sin calibración humana:** el juez se valida con respuestas malas conocidas, pero no contra un set etiquetado por humanos. Además, el juez y el agente no son deterministas: un caso puede variar entre corridas, y conviene repetir la suite antes de sacar conclusiones de un solo resultado.
 - **Estado en memoria:** conversaciones e índice se pierden al reiniciar, no se comparten entre réplicas y no tienen TTL ni límite de longitud de historial.
+- **Historial compartido y en archivos:** cualquier persona con acceso al chat ve todas las conversaciones (no hay usuarios). Además, los JSON en disco no escalan a varias réplicas ni tienen política de retención. En producción, cada conversación pertenecería al cliente autenticado y viviría en una base de datos.
 - **Sin autenticación de usuario final:** cualquiera con la API key de demo puede consultar cualquier `order_id`. En producción, la tool debe validar que el pedido pertenece al cliente autenticado.
 - **Fechas:** la garantía y la ventana de 30 días dependen de la fecha de compra, que el sistema no conoce. El agente solo puede explicar la política.
 
