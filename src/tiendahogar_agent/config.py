@@ -29,7 +29,10 @@ class Settings:
             "EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         )
     )
-    retrieval_top_k: int = field(default_factory=lambda: int(_env("RETRIEVAL_TOP_K", "3")))
+    retrieval_top_k: int = field(default_factory=lambda: int(_env("RETRIEVAL_TOP_K", "4")))
+    retrieval_context_threshold: float = field(
+        default_factory=lambda: float(_env("RETRIEVAL_CONTEXT_THRESHOLD", "0.12"))
+    )
     retrieval_threshold: float = field(
         default_factory=lambda: float(_env("RETRIEVAL_THRESHOLD", "0.25"))
     )

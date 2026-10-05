@@ -32,7 +32,8 @@ def test_warranty_question_retrieves_warranty_policy_text(retriever):
 def test_results_respect_threshold_and_top_k(retriever):
     results = retriever.retrieve("¿Cuánto dura la garantía de mi refrigeradora?")
     assert len(results) <= retriever.top_k
-    assert all(r.score >= retriever.threshold for r in results)
+    assert results[0].score >= retriever.threshold  # puerta: la pregunta es del dominio
+    assert all(r.score >= retriever.context_threshold for r in results)
     assert [r.score for r in results] == sorted((r.score for r in results), reverse=True)
 
 
@@ -42,3 +43,12 @@ def test_results_respect_threshold_and_top_k(retriever):
 )
 def test_out_of_domain_question_retrieves_nothing(retriever, question):
     assert retriever.retrieve(question) == []
+
+
+def test_related_policies_enter_the_context(retriever):
+    # Una pregunta de reembolso también necesita la Política de devoluciones (umbral de contexto).
+    ids = [r.document.doc_id for r in retriever.retrieve("Quiero un reembolso de $300 por mi plancha")]
+    assert ids[0] == "doc4" and "doc2" in ids
+    # Devolver fuera de los 30 días depende de la garantía.
+    ids = [r.document.doc_id for r in retriever.retrieve("¿Puedo devolver algo que compré hace 40 días?")]
+    assert ids[0] == "doc2" and "doc1" in ids

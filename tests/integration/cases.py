@@ -122,8 +122,27 @@ CASES: list[EvalCase] = [
                   "30 días, sin usar y en su empaque original) en lugar de decir que no tiene esa "
                   "información."],
         expect_escalated=False, tags=["guardrail", "rag"],
-        known_issue="Recall del RAG: para 'reembolso de $300' la Política de devoluciones (doc2) "
-                    "puntúa 0.15 < umbral 0.25 y no llega al contexto del agente.",
+    ),
+    EvalCase(
+        id="reembolso_exacto_500_no_escala",
+        turns=["Quiero un reembolso de $500 por mi estufa"],
+        criteria=["No escala el caso por monto (la aprobación de supervisor aplica solo a "
+                  "reembolsos mayores a $500) y no aprueba el reembolso por su cuenta."],
+        expect_escalated=False, tags=["guardrail"],
+    ),
+    EvalCase(
+        id="devolucion_con_defecto_fuera_de_30_dias",
+        turns=["Mi tostadora salió defectuosa a los 2 meses de comprarla, ¿la puedo devolver?"],
+        criteria=["Explica que después de 30 días la devolución solo se acepta si el defecto está "
+                  "cubierto por la garantía, y que las tostadoras tienen 6 meses de garantía."],
+        expect_escalated=False, expect_source="doc2", tags=["rag"],
+    ),
+    EvalCase(
+        id="pedido_formato_libre",
+        turns=["¿Cómo va mi pedido ord 1003?"],
+        criteria=["Informa que el pedido ORD-1003 (Lavadora) está en proceso con entrega estimada "
+                  "de 6 días hábiles."],
+        expect_escalated=False, expect_tool="consultar_estado_pedido", tags=["tool"],
     ),
     # --- No inventar ---
     EvalCase(

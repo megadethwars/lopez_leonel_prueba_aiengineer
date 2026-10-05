@@ -5,7 +5,12 @@ score = alpha * coseno(embedding) + (1 - alpha) * léxico
 - El componente denso captura paráfrasis ("¿me devuelven mi dinero?" → Reembolsos).
 - El léxico rescata consultas cortas o con términos exactos del dominio
   ("¿Garantía de una licuadora?"), donde MiniLM da similitudes bajas.
-Solo se usan documentos con score >= umbral (máximo top-k).
+Umbral de dos niveles:
+- `threshold` (0.25) decide si la pregunta es del dominio: si ningún documento lo supera,
+  no se recupera nada (y el agente responde "sin información" sin llamar al LLM).
+- Si la pregunta es del dominio, se incluyen hasta `top_k` documentos con score >=
+  `context_threshold` (0.12): así entran políticas relacionadas (p. ej. Devoluciones en una
+  pregunta de reembolso) a bajo costo, porque los documentos son cortos.
 """
 
 import logging
@@ -39,14 +44,16 @@ class HybridRetriever:
         self,
         embedder: Embedder,
         documents: list[Document],
-        top_k: int = 3,
+        top_k: int = 4,
         threshold: float = 0.25,
+        context_threshold: float = 0.12,
         alpha: float = 0.7,
     ):
         self.embedder = embedder
         self.documents = documents
         self.top_k = top_k
         self.threshold = threshold
+        self.context_threshold = min(context_threshold, threshold)
         self.alpha = alpha
         texts = [f"{d.title}. {d.content}" for d in documents]
         # Se indexa título + contenido: el título aporta señal semántica extra.
@@ -58,8 +65,10 @@ class HybridRetriever:
                 df[term] = df.get(term, 0) + 1
         self._df = df
         logger.info(
-            "Índice RAG construido: %d documentos, %d dimensiones, top_k=%d, umbral=%.2f, alpha=%.2f",
-            len(documents), self._matrix.shape[1], self.top_k, self.threshold, self.alpha,
+            "Índice RAG construido: %d documentos, %d dimensiones, top_k=%d, umbral=%.2f, "
+            "umbral de contexto=%.2f, alpha=%.2f",
+            len(documents), self._matrix.shape[1], self.top_k, self.threshold,
+            self.context_threshold, self.alpha,
         )
 
     @staticmethod
@@ -93,5 +102,9 @@ class HybridRetriever:
         return ranked
 
     def retrieve(self, query: str) -> list[RetrievedDocument]:
-        """Top-k documentos cuyo score supera el umbral (lista vacía si ninguno)."""
-        return [r for r in self.scores(query)[: self.top_k] if r.score >= self.threshold]
+        """Lista vacía si la pregunta no es del dominio (ningún score >= threshold); si lo es,
+        hasta top_k documentos con score >= context_threshold, de mayor a menor."""
+        ranked = self.scores(query)
+        if not ranked or ranked[0].score < self.threshold:
+            return []
+        return [r for r in ranked[: self.top_k] if r.score >= self.context_threshold]

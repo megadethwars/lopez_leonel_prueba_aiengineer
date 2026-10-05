@@ -32,8 +32,9 @@ def test_delivered_order_has_no_estimated_date():
     assert result["entrega_estimada"] is None
 
 
-def test_order_id_is_normalized():
-    assert consultar_estado_pedido("  ord-1003 ")["producto"] == "Lavadora"
+@pytest.mark.parametrize("order_id", ["  ord-1003 ", "ORD 1003", "ord1003", "ORD_1003"])
+def test_order_id_is_normalized(order_id):
+    assert consultar_estado_pedido(order_id)["producto"] == "Lavadora"
 
 
 @pytest.mark.parametrize("order_id", ["ORD-9999", "1001", "", "ORD-1001; DROP TABLE"])

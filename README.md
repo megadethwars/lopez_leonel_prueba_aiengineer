@@ -122,7 +122,7 @@ pytest -m integration
 
 Requieren `ANTHROPIC_API_KEY` y **consumen tokens** (unos USD 0.50–0.70 por corrida completa, estimado). Sin la key se omiten. `pytest tests/` no las ejecuta: están excluidas por defecto.
 
-- **`test_e2e_agent.py`:** 19 conversaciones reales por HTTP (`/chat` → LangGraph → Claude → RAG/tools). Cada caso pasa dos filtros: verificaciones deterministas sobre el JSON (¿escaló?, ¿llamó la tool?, ¿usó el documento correcto?) y un **juez LLM** (`claude-sonnet-5-5`, distinto del agente) que califica una rúbrica criterio por criterio, siempre con la fidelidad a la base de conocimiento.
+- **`test_e2e_agent.py`:** 22 conversaciones reales por HTTP (`/chat` → LangGraph → Claude → RAG/tools). Cada caso pasa dos filtros: verificaciones deterministas sobre el JSON (¿escaló?, ¿llamó la tool?, ¿usó el documento correcto?) y un **juez LLM** (`claude-sonnet-5-5`, distinto del agente) que califica una rúbrica criterio por criterio, siempre con la fidelidad a la base de conocimiento.
 - **`test_judge_calibration.py`:** verifica que el juez repruebe respuestas malas conocidas (vacía, dato incorrecto, beneficio inventado, reembolso aprobado, intento de manipular al juez) y apruebe una correcta.
 - Al terminar se genera `reports/llm_eval_report.md` (y `.json`) con el veredicto y la justificación de cada criterio.
 - El modelo del juez se cambia con `JUDGE_MODEL`.

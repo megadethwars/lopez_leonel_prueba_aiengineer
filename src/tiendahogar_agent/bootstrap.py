@@ -54,6 +54,7 @@ def build_retriever_from(source: KnowledgeSourcePort, config: Settings = setting
         documents=source.list_documents(),
         top_k=config.retrieval_top_k,
         threshold=config.retrieval_threshold,
+        context_threshold=config.retrieval_context_threshold,
         alpha=config.retrieval_alpha,
     )
 

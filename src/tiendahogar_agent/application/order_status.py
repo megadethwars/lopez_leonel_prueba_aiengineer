@@ -1,6 +1,7 @@
 """Caso de uso: consultar el estado de un pedido."""
 
 import logging
+import re
 
 from ..ports.orders import OrderRepositoryPort
 
@@ -18,6 +19,8 @@ class OrderStatusService:
         `estado="no encontrado"`, sin producto ni fecha.
         """
         normalized = (order_id or "").strip().upper()
+        # Formatos libres del mismo ID ("ord 1003", "ORD1003", "ORD_1003") → "ORD-1003".
+        normalized = re.sub(r"^ORD[\s_-]*(\d+)$", r"ORD-\1", normalized)
         order = self._repository.get(normalized) if normalized else None
         if order is None:
             logger.info("Pedido no encontrado: %r", order_id)
