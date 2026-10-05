@@ -12,3 +12,5 @@ conversations/*
 conversations-aws-backup-*/
 # Respaldos automáticos de draw.io
 *.bkp
+# Scripts de despliegue de la demo (solo locales, no forman parte de la entrega)
+deploy/

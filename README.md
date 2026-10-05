@@ -208,67 +208,17 @@ Cada conversación se guarda como `conversations/<id>.json` (pregunta, respuesta
 
 Los JSON contienen datos de clientes: están en `.gitignore` (solo se versiona la carpeta vacía).
 
-## Despliegue de la demo en AWS (Lightsail)
+## Demo en línea
 
-Para mostrar la demo al cliente desde internet con recursos mínimos: **una instancia AWS Lightsail `micro_3_0`** (1 GB RAM, 2 vCPU, 40 GB SSD, ~USD 7/mes cobrados por hora) con Docker Compose, publicada por HTTPS a través de **API Gateway (HTTP API)**, que en una demo cuesta prácticamente nada (~USD 1 por millón de peticiones). El historial de conversaciones vive en el disco de la instancia.
+Para facilitar la evaluación, el microservicio está desplegado en **AWS** y se puede probar desde el navegador, sin instalar nada. **La URL y la clave de acceso se envían por correo**: no se publican en el repositorio para que nadie más use la demo ni consuma tokens.
 
-```bash
-bash deploy/aws/deploy.sh             # crea la infraestructura y despliega (o actualiza el código si ya existe)
-bash deploy/aws/destroy.sh            # elimina todo: API Gateway, instancia, IP estática y key pair (deja de cobrar)
-bash deploy/aws/destroy.sh --app-only # solo detiene el contenedor y borra la imagen (la instancia sigue)
-```
+1. Abrir la URL de la demo.
+2. Hacer clic en el **icono de engrane** y pegar la clave de acceso en **"API key de la demo"**.
+3. Escribir una pregunta o elegir una de las tarjetas de ejemplo.
 
-En Windows se ejecutan desde **Git Bash**, o desde PowerShell con `bash deploy/aws/deploy.sh`.
+> ⚠️ La clave de acceso es la **`DEMO_API_KEY`** que se envía por correo, **no una API key de Anthropic** (`sk-ant-…`). Son claves distintas: la de Anthropic solo la usa el servidor. Con una clave incorrecta, el chat responde *"Se requiere una API key válida"*.
 
-**Requisitos:** AWS CLI con credenciales configuradas (`aws configure`) y el archivo `.env` con `ANTHROPIC_API_KEY`.
-
-**Qué crea `deploy.sh`:**
-
-| Recurso | Detalle |
-|---|---|
-| Instancia Lightsail `tiendahogar-demo` | Ubuntu 24.04 · `micro_3_0` · Docker + 2 GB de swap (instalados al arrancar con `user-data.sh`) |
-| IP estática `tiendahogar-demo-ip` | Gratis mientras está asociada; `destroy.sh` la libera (sin asociar sí cobra) |
-| Key pair `tiendahogar-demo-key` | Llave privada en `~/.ssh/` (fuera del repo y de carpetas sincronizadas) |
-| Firewall | Puerto 80 público; SSH (22) solo desde la IP de quien despliega |
-| API Gateway `tiendahogar-demo-api` | URL pública `https://<id>.execute-api.<región>.amazonaws.com` con HTTPS. Si la instancia se recrea, `deploy.sh` actualiza el backend y la URL no cambia |
-
-- Genera una **`DEMO_API_KEY`** aleatoria (la imprime al final) para que nadie pueda usar el endpoint, y gastar tokens de Anthropic, sin ella. Se ingresa en el chat web: icono de engrane → "API key de la demo". Se conserva entre despliegues.
-- La imagen se construye **en la instancia**, así que no hace falta un registry (ECR).
-- `destroy.sh` descarga primero el historial a `conversations-aws-backup-<fecha>/` (ignorado por git).
-- Todo es configurable por variables de entorno: `AWS_REGION`, `BUNDLE_ID`, `APP_NAME` (ver `deploy/aws/config.sh`).
-- Si la AWS CLI falla con `SSL: CERTIFICATE_VERIFY_FAILED` (redes con proxy o antivirus que inspeccionan TLS), define `AWS_CA_BUNDLE` con un bundle que incluya los certificados raíz de tu sistema.
-
-> Limitaciones de la demo: API Gateway corta las peticiones a los **30 segundos** (las respuestas del agente tardan entre 3 y 10 s). La instancia también responde por HTTP directo en su IP; para algo más que una demo convendría cerrar el puerto 80 a todo lo que no sea API Gateway (o usar un load balancer con certificado) y un dominio propio.
-
-### Cómo entrar a la demo desplegada (qué clave usar)
-
-El chat web pide una clave en **icono de engrane → "API key de la demo"**. Esa clave es la **`DEMO_API_KEY`** que imprime `deploy.sh` al terminar:
-
-```
-  Chat web:      https://<id>.execute-api.us-east-1.amazonaws.com/
-  DEMO_API_KEY:  <32 caracteres hexadecimales>
-```
-
-> ⚠️ **No se debe pegar la API key de Anthropic** (`sk-ant-…`). Son dos claves distintas e independientes: la `DEMO_API_KEY` **no es un sufijo ni una parte** de la key de Anthropic, es una clave aleatoria generada por `deploy.sh`. Si se pega la key de Anthropic, el chat responde *"Se requiere una API key válida"* (HTTP 401).
-
-| Clave | Formato | Para qué sirve | Dónde va |
-|---|---|---|---|
-| `ANTHROPIC_API_KEY` | `sk-ant-…` (larga) | Que el servidor pueda llamar a Claude | Solo en el archivo `.env`. **Nunca en el navegador** |
-| `DEMO_API_KEY` | 32 caracteres hexadecimales (p. ej. `3f9a…c21e`) | Que solo quien la tenga pueda usar la demo (y gastar tokens) | En el chat web (engrane) o en el header `X-API-Key` de la API |
-
-**Si se perdió la `DEMO_API_KEY`:** se puede volver a ver ejecutando de nuevo `bash deploy/aws/deploy.sh` (la conserva y la imprime al final), o consultándola en la instancia:
-
-```bash
-ssh -i ~/.ssh/tiendahogar-demo-key.pem ubuntu@<IP> "grep DEMO_API_KEY /home/ubuntu/app/.env"
-```
-
-**Pasos para probar en el navegador:**
-
-1. Abrir la URL del chat web.
-2. Engrane → pegar la `DEMO_API_KEY` en "API key de la demo" → Enter (se guarda en el navegador; al hacerlo se carga el historial a la izquierda).
-3. Escribir una pregunta o hacer clic en una de las tarjetas de ejemplo.
-
-Para la API: abrir `/docs`, pulsar **Authorize**, pegar la misma `DEMO_API_KEY` y usar **Try it out** en `POST /chat`.
+La documentación interactiva de la API está en `/docs` de la misma URL (botón **Authorize** → la misma clave).
 
 ## Preguntas de ejemplo
 
