@@ -175,4 +175,12 @@ Gracias a la arquitectura hexagonal, la mayor parte de la migración consiste en
 
 ## Tiempo invertido
 
-Aproximadamente **[COMPLETAR] horas**.
+Aproximadamente **12 horas**, repartidas en 3 días (unas 4 horas diarias).
+
+| Actividad | Tiempo aprox. |
+|---|---|
+| Agente base: RAG híbrido y calibración del umbral, tool de pedidos, guardrails, grafo LangGraph y API FastAPI | 3 h |
+| Pruebas: unit tests y pruebas end-to-end con juez LLM (incluida la corrección de los hallazgos) | 2.5 h |
+| Arquitectura hexagonal (refactor) y documentación: README, SUBMISSION y diagramas | 2.5 h |
+| Experiencia de conversación: skill de tono y empatía, frontend del chat e historial de conversaciones | 2 h |
+| Contenedor Docker y despliegue de la demo en AWS (Lightsail + API Gateway) | 2 h |

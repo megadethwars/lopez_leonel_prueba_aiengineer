@@ -10,3 +10,5 @@ conversations/*
 !conversations/.gitkeep
 # Respaldos del historial descargados por deploy/aws/destroy.sh
 conversations-aws-backup-*/
+# Respaldos automáticos de draw.io
+*.bkp
