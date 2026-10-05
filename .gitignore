@@ -8,3 +8,5 @@ reports/
 # Historial de conversaciones (datos de clientes): solo se versiona la carpeta
 conversations/*
 !conversations/.gitkeep
+# Respaldos del historial descargados por deploy/aws/destroy.sh
+conversations-aws-backup-*/

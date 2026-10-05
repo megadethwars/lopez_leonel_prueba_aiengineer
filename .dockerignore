@@ -6,3 +6,6 @@
 tests
 conversations
 reports
+conversations-aws-backup-*
+deploy
+docs

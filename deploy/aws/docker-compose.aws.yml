@@ -1,0 +1,19 @@
+# Compose para la instancia de AWS Lightsail (lo usa deploy.sh; las rutas son relativas a este archivo).
+# - Publica el servicio en el puerto 80.
+# - El historial vive en el disco de la instancia (../../conversations), fuera de la imagen.
+# - Rotación de logs para no llenar el disco de la instancia.
+services:
+  tiendahogar-agent:
+    build: ../..
+    image: tiendahogar-agent
+    ports:
+      - "80:8000"
+    env_file: ../../.env
+    volumes:
+      - ../../conversations:/app/conversations
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
